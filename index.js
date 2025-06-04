@@ -1,7 +1,6 @@
 import { extractStructureFilesFromMcworld } from "mcbe-leveldb-reader";
 import { selectEl, downloadBlob, sleep, selectEls, loadTranslationLanguage, translate, getStackTrace, random, UserError, joinOr, conditionallyGroup, groupByFileExtension, addFilesToFileInput, setFileInputFiles, dispatchInputEvents } from "./essential.js";
-import * as HoloPrint from "./HoloPrint.js"; // Mantendo a importação como HoloPrint por enquanto
-import SupabaseLogger from "./SupabaseLogger.js";
+import * as HoloPrint from "./HoloPrint.js"; // Renomearemos para HoloLab em breve, mas a funcionalidade interna é baseada nele
 
 import ResourcePackStack from "./ResourcePackStack.js";
 import LocalResourcePack from "./LocalResourcePack.js";
@@ -11,10 +10,9 @@ import FileInputTable from "./components/FileInputTable.js";
 import SimpleLogger from "./components/SimpleLogger.js";
 
 const IN_PRODUCTION = false;
-const ACTUAL_CONSOLE_LOG = false; // Se verdadeiro, "HoloPrint" nos logs do console será trocado por "HoloLab"
+const ACTUAL_CONSOLE_LOG = false;
 
-const supabaseProjectUrl = "https://gnzyfffwvulwxbczqpgl.supabase.co";
-const supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduenlmZmZ3dnVsd3hiY3pxcGdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjMwMjE3NzgsImV4cCI6MjAzODU5Nzc3OH0.AWMhFcP3PiMD3dMC_SeIVuPx128KVpgfkZ5qBStDuVw";
+// SupabaseLogger e constantes relacionadas foram removidos
 
 window.OffscreenCanvas ?? class OffscreenCanvas {
 	constructor(w, h) {
@@ -56,7 +54,7 @@ let logger;
 let languageSelector;
 let defaultResourcePackStackPromise;
 
-let supabaseLogger;
+// supabaseLogger foi removido
 
 let texturePreviewImageCont;
 let texturePreviewImage;
@@ -536,7 +534,7 @@ async function makePack(structureFiles, localResourcePacks) {
 	// this is a mess. all it does is get the settings, call HoloPrint.makePack(), and show the download button.
 	generatePackFormSubmitButton.disabled = true;
 	
-	if(IN_PRODUCTION && ACTUAL_CONSOLE_LOG) { // Ajuste para HoloLab
+	if(IN_PRODUCTION) {
 		console.debug("User agent:", navigator.userAgent);
 	}
 	
@@ -603,20 +601,15 @@ async function makePack(structureFiles, localResourcePacks) {
 	if(pack) {
 		infoButton.dataset.translate = "download";
 		infoButton.classList.add("completed");
-		let hasLoggedPackCreation = false;
 		infoButton.onclick = () => {
-			if(!hasLoggedPackCreation && IN_PRODUCTION) {
-				supabaseLogger ??= new SupabaseLogger(supabaseProjectUrl, supabaseApiKey);
-				supabaseLogger.recordPackCreation(structureFiles);
-				hasLoggedPackCreation = true;
-			}
-			downloadBlob(pack, pack.name.replace("holoprint", "hololab")); // Substitui holoprint por hololab no nome do arquivo
+			// Supabase logging removed
+			downloadBlob(pack, pack.name);
 		};
 	} else {
 		if(generationFailedError) {
 			let bugReportAnchor = document.createElement("a");
 			bugReportAnchor.classList.add("buttonlike", "packInfoButton", "reportIssue");
-			// Adaptação do link de issue para HoloLab, se necessário, ou manter o original se for um fork direto
+			// Usando "HoloLab" na URL do relatório de bug
 			bugReportAnchor.href = `https://github.com/Holo-Lab/holo/issues/new?template=1-pack-creation-error.yml&title=Pack creation error: ${encodeURIComponent(generationFailedError.toString().replaceAll("\n", " "))}&version=${HoloPrint.VERSION}&logs=${encodeURIComponent(JSON.stringify(selectEl("simple-logger")?.allLogs ?? []))}`;
 			bugReportAnchor.target = "_blank";
 			bugReportAnchor.dataset.translate = "pack_generation_failed.report_github_issue";
