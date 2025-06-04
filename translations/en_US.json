@@ -1,4 +1,5 @@
 {
+    // ... traduções existentes ...
     "app_name": "HoloLab",
     "app_name_header": "HoloLab",
     "nav.tiktok": "TikTok",
@@ -50,5 +51,16 @@
     "settings.ignored_blocks": "Ignored blocks:",
     "settings.ignored_blocks.placeholder": "block_1 block_2 etc.",
     "upload.error.no_file_selected": "Please select a .mcstructure file.",
-    "upload.error.mcstructure_only": "Please drop .mcstructure files only."
+    "upload.error.mcstructure_only": "Please drop .mcstructure files only.",
+    // Novas chaves dos templates .lang para descrição do pacote
+    "pack.description.authors_template": "\nStructure made by {STRUCTURE_AUTHORS}",
+    "pack.description.user_description_template": "\n{DESCRIPTION}",
+    "pack.description.disabled_features_template": "\n§4§o{DISABLED_FEATURES}§r",
+    "pack.description.controls_template": "\n\n§lControls:§r{CONTROLS}",
+    "pack.description.spawn_animation_disabled": "Spawn animation disabled",
+    "pack.description.player_controls_disabled": "Player controls disabled",
+    "pack.description.material_list_disabled": "Material list disabled",
+    "pack.description.retextured_control_items_disabled": "Retextured control items disabled",
+    "pack.description.renamed_control_items_disabled": "Renamed control items disabled",
+    "pack.description.and_more_materials": "... and more materials."
 }
