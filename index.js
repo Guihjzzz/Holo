@@ -1,6 +1,6 @@
 import { extractStructureFilesFromMcworld } from "mcbe-leveldb-reader";
 import { selectEl, downloadBlob, sleep, selectEls, loadTranslationLanguage, translate, getStackTrace, random, UserError, joinOr, conditionallyGroup, groupByFileExtension, addFilesToFileInput, setFileInputFiles, dispatchInputEvents } from "./essential.js";
-import * as HoloPrint from "./HoloPrint.js";
+import * as HoloPrint from "./HoloPrint.js"; // Mantendo a importação como HoloPrint por enquanto
 import SupabaseLogger from "./SupabaseLogger.js";
 
 import ResourcePackStack from "./ResourcePackStack.js";
@@ -11,7 +11,7 @@ import FileInputTable from "./components/FileInputTable.js";
 import SimpleLogger from "./components/SimpleLogger.js";
 
 const IN_PRODUCTION = false;
-const ACTUAL_CONSOLE_LOG = false;
+const ACTUAL_CONSOLE_LOG = false; // Se verdadeiro, "HoloPrint" nos logs do console será trocado por "HoloLab"
 
 const supabaseProjectUrl = "https://gnzyfffwvulwxbczqpgl.supabase.co";
 const supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduenlmZmZ3dnVsd3hiY3pxcGdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjMwMjE3NzgsImV4cCI6MjAzODU5Nzc3OH0.AWMhFcP3PiMD3dMC_SeIVuPx128KVpgfkZ5qBStDuVw";
@@ -536,7 +536,7 @@ async function makePack(structureFiles, localResourcePacks) {
 	// this is a mess. all it does is get the settings, call HoloPrint.makePack(), and show the download button.
 	generatePackFormSubmitButton.disabled = true;
 	
-	if(IN_PRODUCTION) {
+	if(IN_PRODUCTION && ACTUAL_CONSOLE_LOG) { // Ajuste para HoloLab
 		console.debug("User agent:", navigator.userAgent);
 	}
 	
@@ -610,13 +610,14 @@ async function makePack(structureFiles, localResourcePacks) {
 				supabaseLogger.recordPackCreation(structureFiles);
 				hasLoggedPackCreation = true;
 			}
-			downloadBlob(pack, pack.name);
+			downloadBlob(pack, pack.name.replace("holoprint", "hololab")); // Substitui holoprint por hololab no nome do arquivo
 		};
 	} else {
 		if(generationFailedError) {
 			let bugReportAnchor = document.createElement("a");
 			bugReportAnchor.classList.add("buttonlike", "packInfoButton", "reportIssue");
-			bugReportAnchor.href = `https://github.com/SuperLlama88888/holoprint/issues/new?template=1-pack-creation-error.yml&title=Pack creation error: ${encodeURIComponent(generationFailedError.toString().replaceAll("\n", " "))}&version=${HoloPrint.VERSION}&logs=${encodeURIComponent(JSON.stringify(selectEl("simple-logger").allLogs))}`;
+			// Adaptação do link de issue para HoloLab, se necessário, ou manter o original se for um fork direto
+			bugReportAnchor.href = `https://github.com/Holo-Lab/holo/issues/new?template=1-pack-creation-error.yml&title=Pack creation error: ${encodeURIComponent(generationFailedError.toString().replaceAll("\n", " "))}&version=${HoloPrint.VERSION}&logs=${encodeURIComponent(JSON.stringify(selectEl("simple-logger")?.allLogs ?? []))}`;
 			bugReportAnchor.target = "_blank";
 			bugReportAnchor.dataset.translate = "pack_generation_failed.report_github_issue";
 			infoButton.parentNode.replaceChild(bugReportAnchor, infoButton);
