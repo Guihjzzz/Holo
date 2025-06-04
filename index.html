@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-translate="app_name">HoloLab</title>
-    <meta name="description" content="Ferramenta para criar e personalizar texturas para Minecraft Bedrock.">
-    <meta name="keywords" content="hololab, minecraft textures, texture generator, mcbe textures">
+    <meta name="description" content="Ferramenta de construção para Minecraft Bedrock, similar a Litematica ou Schematica. Crie pacotes de recursos para MCBE para exibir hologramas de esquemáticos. Facilite a construção no MCPE!">
+    <meta name="keywords" content="hololab, litematica bedrock, schematica bedrock, minecraft structure">
 
     <meta property="og:url" content="https://guihjzzz.github.io/Holo/">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="HoloLab - Minecraft Texture Generator">
-    <meta property="og:description" content="Crie e personalize texturas para Minecraft Bedrock com facilidade.">
+    <meta property="og:title" content="HoloLab - Minecraft Bedrock Hologram Tool">
+    <meta property="og:description" content="Ferramenta de construção para Minecraft Bedrock, similar a Litematica ou Schematica. Crie pacotes de recursos para MCBE para exibir hologramas de esquemáticos. Facilite a construção no MCPE!">
     <meta property="og:image" content="https://github.com/Holo-Lab/holo/blob/main/1748951676116.png?raw=true">
     <meta property="og:image:width" content="720">
     <meta property="og:image:height" content="210">
@@ -24,11 +24,11 @@
             "@type": "WebApplication",
             "name": "HoloLab",
             "url": "https://guihjzzz.github.io/Holo/",
-            "description": "Ferramenta para criar e personalizar texturas para Minecraft Bedrock.",
-            "applicationCategory": "MultimediaApplication",
+            "description": "Ferramenta de construção para Minecraft Bedrock, similar a Litematica ou Schematica. Crie pacotes de recursos para MCBE para exibir hologramas de esquemáticos. Facilite a construção no MCPE!",
+            "applicationCategory": "UtilitiesApplication",
             "browserRequirements": "Requires JavaScript",
             "operatingSystem": "All",
-            "keywords": "hololab, minecraft textures, texture generator",
+            "keywords": "hololab, litematica bedrock, schematica bedrock, minecraft structure",
             "image": "https://github.com/Holo-Lab/holo/blob/main/ChatGPT%20Image%203%20de%20jun.%20de%202025,%2008_40_34.png?raw=true",
             "author": {
                 "@type": "Person",
@@ -65,6 +65,7 @@
             }
         }
     </script>
+    <!-- O index.js precisará ser o do HoloPrint original, adaptado -->
     <script src="index.js" type="module" defer></script>
 </head>
 <body>
@@ -80,59 +81,131 @@
         <div class="language-switcher">
             <select id="languageSelector" aria-label="Select language">
                 <option value="en_US">English</option>
-                <!-- Outros idiomas serão adicionados pelo JS -->
             </select>
         </div>
     </header>
 
     <main>
         <section class="hero-section">
-            <h1 data-translate="hero.title">Create Custom Minecraft Textures</h1>
-            <p data-translate="hero.subtitle">Easily generate and customize textures for Minecraft Bedrock Edition.</p>
+            <h1 data-translate="hero.title_holoprint">Build in Minecraft Bedrock with Holograms</h1>
+            <p data-translate="hero.subtitle_holoprint">Create resource packs for MCBE to display structures as holograms in-game. Similar to Litematica or Schematica, but for Bedrock Edition.</p>
         </section>
 
-        <section id="texture-upload-section">
-            <h2 data-translate="upload.title">Upload Image File(s)</h2>
-            <p data-translate="upload.description">Select or drag and drop your image files (.png, .jpg, .tga) to get started.</p>
-            <div class="file-upload-area">
-                <input type="file" id="imageFilesInput" accept="image/png, image/jpeg, image/tga" multiple style="display: none;">
-                <div class="drop-zone" id="dropZone">
-                    <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="48px" height="48px"><path d="M0 0h24v24H0z" fill="none"/><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-                    <p data-translate="upload.dropzone_text">Click to select or drag and drop your image files</p>
+        <form id="generatePackForm" action="javascript:">
+            <section id="structure-upload-section">
+                <h2 data-translate="upload.title_structure">Upload Structure File</h2>
+                <p data-translate="upload.description_structure">Select or drag and drop your .mcstructure file to generate your hologram pack.</p>
+                <div class="file-upload-area">
+                     <input type="file" id="structureFilesInput" accept=".mcstructure" multiple style="display: none;" name="structureFiles" required>
+                    <div class="drop-zone" id="dropZoneStructure">
+                        <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="48px" height="48px"><path d="M0 0h24v24H0z" fill="none"/><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                        <p data-translate="upload.dropzone_text_structure">Click to select or drag and drop your .mcstructure file</p>
+                    </div>
                 </div>
+                <file-input-table id="structureFilesTable" hide-file-extensions file-text-count="{COUNT} file[s] selected" data-translate-file-text-count="file_input_table.count" empty-text="No files are selected" data-translate-empty-text="file_input_table.empty" remove-all-text="Remove all" data-translate-remove-all-text="file_input_table.remove_all">
+                     <!-- O input está acima, este componente será populado pelo JS -->
+                </file-input-table>
+            </section>
+
+            <div class="main-content-wrapper">
+                <section id="texture-preview-section">
+                    <h2 data-translate="preview.texture_title">Texture Preview</h2>
+                    <div id="texturePreviewImageCont" class="preview-container">
+                        <!-- A imagem de preview será inserida aqui pelo JS -->
+                        <div class="loader hidden"></div>
+                        <p id="texturePreviewName" data-translate="preview.no_file_selected">No file selected</p>
+                    </div>
+                </section>
+
+                <section id="hologram-options-section">
+                    <h2 data-translate="options.hologram_title">Hologram Options</h2>
+                    <div class="options-grid">
+                        <div class="option-group">
+                            <label for="scaleInput" data-translate="settings.ghost_block_scale">Ghost block scale:</label>
+                            <input type="number" id="scaleInput" name="scale" min="70" max="100" step="1" value="95"/>%
+                        </div>
+                        <div class="option-group">
+                            <label for="tintColorInput" data-translate="settings.textures.tint.color">Overlay tint:</label>
+                            <input type="color" id="tintColorInput" name="tintColor" value="#579EFA"/>
+                        </div>
+                        <div class="option-group">
+                            <label for="tintOpacityInput" data-translate="settings.textures.tint.opacity">Overlay tint opacity:</label>
+                            <input type="number" id="tintOpacityInput" name="tintOpacity" min="1" max="100" value="20"/>%
+                        </div>
+                         <div class="option-group">
+                            <label for="textureOutlineWidthInput" data-translate="settings.textures.outline.width">Texture outline width:</label>
+                            <select id="textureOutlineWidthInput" name="textureOutlineWidth">
+                                <option value="0" data-translate="settings.textures.outline.width.no_outline">None</option>
+                                <option value="0.125">0.125px</option>
+                                <option value="0.25" selected>0.25px</option>
+                                <option value="0.5">0.5px</option>
+                                <option value="1">1px</option>
+                            </select>
+                        </div>
+                        <div class="option-group">
+                            <label for="textureOutlineColorInput" data-translate="settings.textures.outline.color">Texture outline color:</label>
+                            <input type="color" id="textureOutlineColorInput" name="textureOutlineColor" value="#0000FF"/>
+                        </div>
+                        <div class="option-group">
+                            <label for="textureOutlineOpacityInput" data-translate="settings.textures.outline.opacity">Texture outline opacity:</label>
+                            <input type="number" id="textureOutlineOpacityInput" name="textureOutlineOpacity" min="10" max="100" value="65"/>%
+                        </div>
+                        
+                        <div class="option-group checkbox-group">
+                            <label for="spawnAnimationEnabledInput" data-translate="settings.features.spawn_animation">Spawn animation:</label>
+                            <input type="checkbox" id="spawnAnimationEnabledInput" name="spawnAnimationEnabled" checked />
+                        </div>
+                         <div class="option-group checkbox-group">
+                            <label for="playerControlsEnabledInput" data-translate="settings.features.player_controls">Player controls:</label>
+                            <input type="checkbox" id="playerControlsEnabledInput" name="playerControlsEnabled" checked />
+                        </div>
+                         <div class="option-group checkbox-group">
+                            <label for="materialListEnabledInput" data-translate="settings.features.material_list">Material list:</label>
+                            <input type="checkbox" id="materialListEnabledInput" name="materialListEnabled" checked />
+                        </div>
+                        <!-- Adicionar mais opções do HoloPrint original aqui -->
+                    </div>
+                    <details class="advanced-options">
+                        <summary data-translate="settings.advanced">Advanced</summary>
+                        <div class="options-grid">
+                            <div class="option-group">
+                                <label data-translate="settings.initial_offset">Initial offset (X Y Z):</label>
+                                <div class="multi-input">
+                                    <input type="number" name="initialOffsetX" min="-999" max="999" step="1" value="0" placeholder="X"/>
+                                    <input type="number" name="initialOffsetY" min="-999" max="999" step="1" value="0" placeholder="Y"/>
+                                    <input type="number" name="initialOffsetZ" min="-999" max="999" step="1" value="0" placeholder="Z"/>
+                                </div>
+                            </div>
+                            <div class="option-group">
+                                <label for="packNameInput" data-translate="options.pack_name_form">Pack Name (Optional):</label>
+                                <input type="text" id="packNameInput" name="packName" placeholder="MyHoloLabPack">
+                            </div>
+                            <div class="option-group">
+                                <label data-translate="settings.ignored_blocks">Ignored blocks:</label>
+                                <input type="text" name="ignoredBlocks" placeholder="block_1 block_2 etc." data-translate-placeholder="settings.ignored_blocks.placeholder"/>
+                            </div>
+                           <!-- Adicionar outras opções avançadas do HoloPrint original aqui -->
+                        </div>
+                    </details>
+                </section>
             </div>
-             <div id="file-preview-area">
-                <!-- Previews das imagens carregadas aparecerão aqui -->
+
+            <button name="submit" id="generatePackButton" data-translate="button.generate_pack">Generate Pack</button>
+        </form>
+        
+        <section id="error-report-section">
+            <h2 data-translate="errors.title">Error Report</h2>
+            <div id="errorLogContainer" class="log-container">
+                <p data-translate="errors.no_errors">No errors to report yet.</p>
             </div>
         </section>
-
-        <section id="texture-options-section">
-            <h2 data-translate="options.title">Texture Options</h2>
-            <!-- Input para nome do pacote de textura -->
-            <div class="option-group">
-                <label for="packNameInput" data-translate="options.pack_name">Texture Pack Name:</label>
-                <input type="text" id="packNameInput" placeholder="My Awesome Textures">
-            </div>
-            <!-- Mais opções de texturização (tint, outline, etc.) podem ser adicionadas aqui no futuro -->
-            <!-- Exemplo:
-            <div class="option-group">
-                <label for="tintColor" data-translate="options.tint_color">Tint Color:</label>
-                <input type="color" id="tintColor" value="#FFFFFF">
-            </div>
-            -->
-        </section>
-
-        <button id="generateTexturesButton" data-translate="button.generate_textures">Generate Textures</button>
-
-        <div id="outputArea">
-            <!-- Links para download das texturas ou do pacote .zip aparecerão aqui -->
-        </div>
+         <div id="completedPacksCont"></div> <!-- Para os botões de download -->
     </main>
 
     <footer>
         <div class="footer-column">
             <h3 data-translate="footer.about.title">About HoloLab</h3>
-            <p data-translate="footer.about.description">The ultimate tool for building in Minecraft Bedrock Edition with holographic structure guides.</p> <!-- Manter esta descrição ou atualizar para foco em textura? -->
+            <p data-translate="footer.about.description_hololab">The ultimate tool for building in Minecraft Bedrock Edition with holographic structure guides.</p>
         </div>
         <div class="footer-column">
             <h3 data-translate="footer.links.title">Links</h3>
@@ -145,7 +218,7 @@
         <div class="footer-column">
             <h3 data-translate="footer.developer.title">Developer</h3>
             <p data-translate="footer.developer.developed_by" data-translation-sub-author="Guihjzzz">Developed by {AUTHOR}</p>
-            <p data-translate="footer.developer.version" data-translation-sub-version="1.0.0-HoloLab">Version {VERSION}</p> <!-- VERSION será substituído pelo JS ou hardcoded -->
+            <p data-translate="footer.developer.version" data-translation-sub-version="1.0.0-HoloLab">Version {VERSION}</p>
         </div>
     </footer>
     <div id="dropFileNotice" class="hidden">
