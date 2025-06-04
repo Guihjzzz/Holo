@@ -86,7 +86,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	// Make the pack
 	let loadedStuff = await loadStuff({
 		packTemplate: {
-			manifest: "manifest.json",
+			manifest: "manifest.json", // Este é o template, será modificado abaixo
 			hologramRenderControllers: "render_controllers/armor_stand.hologram.render_controllers.json",
 			hologramGeo: "models/entity/armor_stand.hologram.geo.json", 
 			hologramMaterial: "materials/entity.material",
@@ -587,11 +587,14 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
     const MAX_HEADER_DESC_LENGTH = 250; 
 
     if (fullDescription.length > MAX_HEADER_DESC_LENGTH) {
-        let مواد_restantes = `... and more materials.`; 
-        let devStringLength = baseDescription.length + `\n§r`.length + مواد_restantes.length; // Corrigido para usar baseDescription.length
+        let مواد_restantes_key = "pack.description.and_more_materials"; // Chave para tradução
+        let مواد_restantes = translate(مواد_restantes_key, "en_US") || "... and more materials."; // Fallback
+        
+        let devStringLength = baseDescription.length + "\n§r".length + مواد_restantes.length;
         let materialListAllowedLength = MAX_HEADER_DESC_LENGTH - devStringLength;
+        
         if (materialListAllowedLength > 10) { 
-             materialListStringForManifest = materialListStringForManifest.substring(0, materialListAllowedLength) + "..."; // Removido -3, substring já cuida disso
+             materialListStringForManifest = materialListStringForManifest.substring(0, materialListAllowedLength) + "...";
             manifest["header"]["description"] = `${baseDescription}\n§r${materialListStringForManifest}`;
         } else {
             manifest["header"]["description"] = baseDescription;
@@ -1489,7 +1492,7 @@ async function makePackIconFallback(structureFile) {
 			i *= 4;
 			let bit = fileHashBits[i];
 			if(MORE_TILE_TYPES) {
-				if(fileHashBytes[i] && fileHashBits[i + 1] && fileHashBits[i + 2] && fileHashBits[i + 3]) {
+				if(fileHashBits[i] && fileHashBits[i + 1] && fileHashBits[i + 2] && fileHashBits[i + 3]) {
 					drawArc(x + 0.5, y + 0.5, 0, pi * 2);
 					continue;
 				}
