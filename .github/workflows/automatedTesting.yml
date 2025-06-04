@@ -1,0 +1,69 @@
+name: Automated Testing
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+permissions: read-all
+jobs:
+  validate-json-data:
+    name: Validate JSON Data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.1
+      - name: Validate JSON Data
+        run: |
+          npm install @actions/core ajv strip-json-comments@3.1.1
+          node tests/validateJsonData.js
+  check-block-translation-coverage:
+    name: Check Block Translation Coverage
+    needs: validate-json-data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.1
+      - name: Check block translation coverage
+        run: |
+          npm install @actions/core puppeteer mime-types
+          node tests/checkBlockTranslationCoverage.js
+  test-sample-structures:
+    name: Test Sample Structures
+    needs: [validate-json-data, check-block-translation-coverage]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        browser: [Chrome, Firefox]
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.1
+      - name: Build
+        run: |
+          sed -i '1i export * from "./HoloPrint.js";' index.js
+          bash ci-cd/build.sh
+      - name: Upload built code
+        if: matrix.browser == 'Firefox'
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: build
+          path: .
+      - name: Test Sample Structures on ${{ matrix.browser }}
+        run: |
+          npm install @actions/core puppeteer mime-types
+          if [[ "${{ matrix.browser }}" == "Firefox" ]]; then
+            npx puppeteer browsers install firefox
+          fi
+          node tests/testSampleStructures.js ${{ matrix.browser }}
+      - name: Upload completed packs as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4.4.0
+        with:
+          name: completed_packs_${{ matrix.browser }}
+          path: tests/completedPacks
+      - name: Upload screenshots as artifacts
+        if: always() && matrix.browser == 'Chrome'
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: screenshots_${{ matrix.browser }}
+          path: tests/screenshots
