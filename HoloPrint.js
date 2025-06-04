@@ -86,7 +86,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	// Make the pack
 	let loadedStuff = await loadStuff({
 		packTemplate: {
-			manifest: "manifest.json",
+			manifest: "manifest.json", // Este é o template, será modificado abaixo
 			hologramRenderControllers: "render_controllers/armor_stand.hologram.render_controllers.json",
 			hologramGeo: "models/entity/armor_stand.hologram.geo.json", 
 			hologramMaterial: "materials/entity.material",
@@ -102,9 +102,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			terrainTexture: config.RETEXTURE_CONTROL_ITEMS? "textures/terrain_texture.json" : undefined,
 			hudScreenUI: config.MATERIAL_LIST_ENABLED? "ui/hud_screen.json" : undefined,
 			customEmojiFont: "font/glyph_E2.png",
-			languagesDotJson: "texts/languages.json",
-            en_US_lang_template: "texts/en_US.lang", // Carregar do template local
-            zh_CN_lang_template: "texts/zh_CN.lang"  // Carregar do template local
+			languagesDotJson: "texts/languages.json"
 		},
 		resources: {
 			entityFile: "entity/armor_stand.entity.json",
@@ -120,25 +118,11 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			itemMetadata: "metadata/vanilladata_modules/mojang-items.json"
 		}
 	}, resourcePackStack);
-	
-    let { 
-        manifest, packIcon, entityFile, hologramRenderControllers, defaultPlayerRenderControllers, 
-        hologramGeo, hologramMaterial, hologramAnimationControllers, hologramAnimations, 
-        boundingBoxOutlineParticle, blockValidationParticle, savingBackupParticle, 
-        singleWhitePixelTexture, exclamationMarkTexture, saveIconTexture, itemTexture, 
-        terrainTexture, hudScreenUI, customEmojiFont, languagesDotJson, 
-        en_US_lang_template, zh_CN_lang_template,
-        resourceItemTexture, itemIcons 
-    } = loadedStuff.files;
-	
-    let { blockMetadata, itemMetadata } = loadedStuff.data;
-
-    // Usar os templates de .lang carregados
-    let templateLangFiles = {
-        "en_US": en_US_lang_template,
-        "zh_CN": zh_CN_lang_template
-        // Adicionar outros idiomas aqui se eles forem incluídos no packTemplate
-    };
+	let { manifest, packIcon, entityFile, hologramRenderControllers, defaultPlayerRenderControllers, hologramGeo, hologramMaterial, hologramAnimationControllers, hologramAnimations, boundingBoxOutlineParticle, blockValidationParticle, savingBackupParticle, singleWhitePixelTexture, exclamationMarkTexture, saveIconTexture, itemTexture, hudScreenUI, customEmojiFont, languagesDotJson, resourceItemTexture, terrainTexture, itemIcons } = loadedStuff.files;
+	let { blockMetadata, itemMetadata } = loadedStuff.data;
+	let resourceLangFiles = (await loadStuff({
+		resources: Object.fromEntries(languagesDotJson.map(language => [language, `texts/${language}.lang`])) 
+	}, resourcePackStack)).files;
 	
 	let structures = nbts.map(nbt => nbt["structure"]);
 	
@@ -560,7 +544,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	
 	console.log("Block counts map:", materialList.materials);
 	let finalisedMaterialLists = Object.fromEntries(languagesDotJson.map(language => {
-		materialList.setLanguage(templateLangFiles[language] || templateLangFiles["en_US"]); // Fallback para en_US se o template do idioma não for encontrado
+		materialList.setLanguage(resourceLangFiles[language]); 
 		return [language, materialList.export()];
 	}));
 	let finalisedMaterialList = finalisedMaterialLists["en_US"]; 
@@ -589,14 +573,43 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	
 	// Modificações do Manifest
 	manifest["header"]["name"] = `${packName} - §l§bHolo§dLab§r`;
-    manifest["header"]["description"] = "pack.description"; // Aponta para a chave de tradução que será preenchida dinamicamente
-	manifest["header"]["uuid"] = crypto.randomUUID();
-	let packVersionToUse = VERSION.match(/^HoloLab v(\d+)\.(\d+)\.(\d+)$|^HoloLab (\w+)$/)?.slice(1)?.map(x => x ? (isNaN(parseInt(x)) ? 0 : +x) : 0) ?? [1, 0, 0];
-    if (VERSION.endsWith(" dev") || VERSION.endsWith(" testing")) packVersionToUse = [1,0,0]; 
     
-	manifest["header"]["version"] = packVersionToUse;
+    let devString = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
+    let totalBlockCountString = `\n\n§lTotal block count: ${totalMaterialCount}`;
+    
+    let materialListStringForManifest = finalisedMaterialLists["en_US"]
+        .map(({ translatedName, count }) => `${count} ${translatedName}`)
+        .join(", ");
+
+    let baseDescription = `${devString}${totalBlockCountString}`;
+    let fullDescription = `${baseDescription}\n§r${materialListStringForManifest}`;
+
+    const MAX_HEADER_DESC_LENGTH = 250; 
+
+    if (fullDescription.length > MAX_HEADER_DESC_LENGTH) {
+        let مواد_restantes_key = "pack.description.and_more_materials"; // Chave para tradução
+        let مواد_restantes = translate(مواد_restantes_key, "en_US") || "... and more materials."; // Fallback
+        
+        let devStringLength = baseDescription.length + "\n§r".length + مواد_restantes.length;
+        let materialListAllowedLength = MAX_HEADER_DESC_LENGTH - devStringLength;
+        
+        if (materialListAllowedLength > 10) { 
+             materialListStringForManifest = materialListStringForManifest.substring(0, materialListAllowedLength) + "...";
+            manifest["header"]["description"] = `${baseDescription}\n§r${materialListStringForManifest}`;
+        } else {
+            manifest["header"]["description"] = baseDescription;
+        }
+    } else {
+        manifest["header"]["description"] = fullDescription;
+    }
+
+	manifest["header"]["uuid"] = crypto.randomUUID();
+	let packVersion = VERSION.match(/^HoloLab v(\d+)\.(\d+)\.(\d+)$|^HoloLab (\w+)$/)?.slice(1)?.map(x => x ? (isNaN(parseInt(x)) ? 0 : +x) : 0) ?? [1, 0, 0];
+    if (VERSION.endsWith(" dev") || VERSION.endsWith(" testing")) packVersion = [1,0,0]; 
+    
+	manifest["header"]["version"] = packVersion;
 	manifest["modules"][0]["uuid"] = crypto.randomUUID();
-	manifest["modules"][0]["version"] = packVersionToUse;
+	manifest["modules"][0]["version"] = packVersion;
     manifest["modules"][0]["description"] = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz"; 
 
 	manifest["metadata"]["generated_with"] = {"HoloLab": [VERSION]}; 
@@ -624,81 +637,30 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	let controlsHaveBeenCustomised = JSON.stringify(config.CONTROLS) != JSON.stringify(DEFAULT_PLAYER_CONTROLS);
 	let pmmpBedrockDataFetcher = config.RENAME_CONTROL_ITEMS || config.RETEXTURE_CONTROL_ITEMS? await createPmmpBedrockDataFetcher() : undefined;
 	let itemTags = config.RENAME_CONTROL_ITEMS || config.RETEXTURE_CONTROL_ITEMS? await pmmpBedrockDataFetcher.fetch("item_tags.json").then(res => res.json()) : undefined;
-	let { inGameControls, controlItemTranslations } = controlsHaveBeenCustomised || config.RENAME_CONTROL_ITEMS? await translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, templateLangFiles, itemTags) : {}; // Passar templateLangFiles
+	let { inGameControls, controlItemTranslations } = controlsHaveBeenCustomised || config.RENAME_CONTROL_ITEMS? await translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, resourceLangFiles, itemTags) : {};
 	
-	let packGenerationTime = (new Date()).toLocaleString();
-	const disabledFeatureTranslations = { 
-		"SPAWN_ANIMATION_ENABLED": "spawn_animation_disabled",
-		"PLAYER_CONTROLS_ENABLED": "player_controls_disabled",
-		"MATERIAL_LIST_ENABLED": "material_list_disabled",
-		"RETEXTURE_CONTROL_ITEMS": "retextured_control_items_disabled",
-		"RENAME_CONTROL_ITEMS": "renamed_control_items_disabled"
-	};
-
 	let languageFiles = await Promise.all(languagesDotJson.map(async language => {
-		let langFileContent = templateLangFiles[language] || templateLangFiles["en_US"]; // Pega o conteúdo do template .lang
-
-		langFileContent = langFileContent.replaceAll("{PACK_NAME}", `${packName} - §l§bHolo§dLab§r`);
-		langFileContent = langFileContent.replaceAll("{PACK_GENERATION_TIME}", packGenerationTime);
-		langFileContent = langFileContent.replaceAll("{TOTAL_MATERIAL_COUNT}", totalMaterialCount);
+		let languageFile = (await fetch(`packTemplate/texts/${language}.lang`).then(res => res.text())).replaceAll("\r\n", "\n"); 
 		
-        let materialListForThisLang = finalisedMaterialLists[language]
-            .map(({ translatedName, partitionedCount }) => `${partitionedCount} ${translatedName}`)
-            .join(", ");
-        
-        const MAX_LANG_MATERIAL_LIST_LENGTH = 180; 
-        if (materialListForThisLang.length > MAX_LANG_MATERIAL_LIST_LENGTH) {
-            let andMoreMaterialsKey = "pack.description.and_more_materials";
-            // Usar a função translate para obter a tradução correta para "and more materials"
-            let andMoreMaterialsText = translate(andMoreMaterialsKey, language) || "... and more materials."; 
-            materialListForThisLang = materialListForThisLang.substring(0, MAX_LANG_MATERIAL_LIST_LENGTH - andMoreMaterialsText.length) + andMoreMaterialsText;
+        const newPackDescriptionForLang = "pack.description=§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
+        if (languageFile.match(/^pack\.description=.*$/m)) {
+            languageFile = languageFile.replace(/^pack\.description=.*$/m, newPackDescriptionForLang);
+        } else {
+            languageFile = newPackDescriptionForLang + "\n" + languageFile;
         }
-        langFileContent = langFileContent.replaceAll("{MATERIAL_LIST}", materialListForThisLang);
+        
+		languageFile = languageFile.replaceAll("{PACK_NAME}", `${packName} - §l§bHolo§dLab§r`); 
 		
-		if(config.AUTHORS.length) {
-			// Usar chaves de tradução para os templates das seções, em vez de buscar no próprio arquivo
-            const authorsTemplateKey = "pack.description.authors_template_key_placeholder"; // Crie uma chave real nos seus arquivos de tradução
-			langFileContent = langFileContent.replaceAll("{AUTHORS_SECTION}", translate(authorsTemplateKey, language)?.replace("{STRUCTURE_AUTHORS}", config.AUTHORS.join(" and ")) || "");
-		} else {
-			langFileContent = langFileContent.replaceAll("{AUTHORS_SECTION}", "");
-		}
+        languageFile = languageFile.replace("{MATERIAL_LIST}", ""); 
+		languageFile = languageFile.replaceAll(/^pack\.description\.(authors|description|disabled_features|controls|material_list_heading)=.*$/mg, ""); 
+		languageFile = languageFile.replaceAll(/\t*#.+/g, ""); 
+        languageFile = languageFile.replace(/^\s*[\r\n]/gm, ""); 
 
-		if(config.DESCRIPTION) {
-            const userDescTemplateKey = "pack.description.user_description_template_key_placeholder"; // Crie uma chave real
-			langFileContent = langFileContent.replaceAll("{DESCRIPTION_SECTION}", translate(userDescTemplateKey, language)?.replace("{DESCRIPTION}", config.DESCRIPTION.replaceAll("\n", "\\n")) || "");
-		} else {
-			langFileContent = langFileContent.replaceAll("{DESCRIPTION_SECTION}", "");
-		}
-
-		let translatedDisabledFeatures = Object.entries(disabledFeatureTranslations)
-            .filter(([feature]) => !config[feature])
-            .map(([_, translationKey]) => translate(translationKey, language))
-            .filter(Boolean)
-            .join("\\n");
-
-		if(translatedDisabledFeatures) {
-            const disabledFeaturesTemplateKey = "pack.description.disabled_features_template_key_placeholder"; // Crie uma chave real
-			langFileContent = langFileContent.replaceAll("{DISABLED_FEATURES_SECTION}", translate(disabledFeaturesTemplateKey, language)?.replace("{DISABLED_FEATURES}", translatedDisabledFeatures) || "");
-		} else {
-			langFileContent = langFileContent.replaceAll("{DISABLED_FEATURES_SECTION}", "");
-		}
-
-		if(controlsHaveBeenCustomised && inGameControls && inGameControls[language]) {
-            const controlsTemplateKey = "pack.description.controls_template_key_placeholder"; // Crie uma chave real
-			langFileContent = langFileContent.replaceAll("{CONTROLS_SECTION}", translate(controlsTemplateKey, language)?.replace("{CONTROLS}", inGameControls[language].replaceAll("\n", "\\n")) || "");
-		} else {
-			langFileContent = langFileContent.replaceAll("{CONTROLS_SECTION}", "");
+		if(config.RENAME_CONTROL_ITEMS) {
+			languageFile += "\n" + controlItemTranslations[language]; 
 		}
 		
-        langFileContent = langFileContent.replace(/{AUTHORS_SECTION}|{DESCRIPTION_SECTION}|{DISABLED_FEATURES_SECTION}|{CONTROLS_SECTION}/g, "");
-		langFileContent = langFileContent.replaceAll(/\t*#.+/g, ""); 
-        langFileContent = langFileContent.replace(/^\s*[\r\n]/gm, ""); 
-
-		if(config.RENAME_CONTROL_ITEMS && controlItemTranslations && controlItemTranslations[language]) {
-			langFileContent += "\n" + controlItemTranslations[language]; 
-		}
-		
-		return [language, langFileContent.trim()]; 
+		return [language, languageFile.trim()]; 
 	}));
 	
 	let hasModifiedTerrainTexture = false;
@@ -1450,11 +1412,11 @@ function patchRenderControllers(renderControllers, patches) {
  * @param {Record<String, any>} blockMetadata
  * @param {Record<String, any>} itemMetadata
  * @param {Array<String>} languagesDotJson
- * @param {Record<String, String>} templateLangFiles
+ * @param {Record<String, String>} resourceLangFiles
  * @param {Record<String, Array<String>>} itemTags
  * @returns {Promise<{ inGameControls: Record<String, String>, controlItemTranslations: Record<String, String> }>}
  */
-async function translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, templateLangFiles, itemTags) {
+async function translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, resourceLangFiles, itemTags) {
 	let controlsMaterialList = await new MaterialList(blockMetadata, itemMetadata);
 	let inGameControls = {};
 	let controlItemTranslations = {};
@@ -1467,7 +1429,7 @@ async function translateControlItems(config, blockMetadata, itemMetadata, langua
 		let controlItemTranslationKeys = {};
 		Object.entries(config.CONTROLS).forEach(([control, itemCriteria]) => {
 			controlsMaterialList.clear();
-			controlsMaterialList.setLanguage(templateLangFiles[language] || templateLangFiles["en_US"]); // Usa o template do idioma ou fallback para inglês
+			controlsMaterialList.setLanguage(resourceLangFiles[language]);
 			itemCriteria["names"].forEach(itemName => controlsMaterialList.addItem(itemName));
 			
 			let itemInfo = controlsMaterialList.export();
