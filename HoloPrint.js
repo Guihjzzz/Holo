@@ -44,7 +44,7 @@ export const DEFAULT_PLAYER_CONTROLS = {
 };
 
 const HOLOGRAM_LAYER_MODES = createNumericEnum(["SINGLE", "ALL_BELOW"]);
-const FIXED_PACK_ICON_URL = "https://github.com/Holo-Lab/holo/blob/main/ChatGPT%20Image%203%20de%20jun.%20de%202025,%2008_40_34.png?raw=true";
+const FIXED_PACK_ICON_PATH = "guihjzzz.png"; // Alterado para caminho local
 
 /**
  * Makes a HoloLab resource pack from a structure file.
@@ -75,18 +75,18 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	
     let packIconBlob;
     try {
-        const response = await fetch(FIXED_PACK_ICON_URL);
-        if (!response.ok) throw new Error(`Failed to fetch fixed icon: ${response.statusText}`);
+        const response = await fetch(FIXED_PACK_ICON_PATH); // Busca o arquivo localmente
+        if (!response.ok) throw new Error(`Failed to fetch fixed icon from ${FIXED_PACK_ICON_PATH}: ${response.statusText}`);
         packIconBlob = await response.blob();
     } catch (e) {
-        console.warn(`Could not load fixed pack icon from URL: ${e}. Falling back to dynamic/form icon.`);
+        console.warn(`Could not load fixed pack icon from ${FIXED_PACK_ICON_PATH}: ${e}. Falling back to dynamic/form icon.`);
         packIconBlob = config.PACK_ICON_BLOB ?? await makePackIconFallback(concatenateFiles(structureFiles));
     }
 
 	// Make the pack
 	let loadedStuff = await loadStuff({
 		packTemplate: {
-			manifest: "manifest.json", // Este é o template, será modificado abaixo
+			manifest: "manifest.json",
 			hologramRenderControllers: "render_controllers/armor_stand.hologram.render_controllers.json",
 			hologramGeo: "models/entity/armor_stand.hologram.geo.json", 
 			hologramMaterial: "materials/entity.material",
@@ -102,7 +102,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			terrainTexture: config.RETEXTURE_CONTROL_ITEMS? "textures/terrain_texture.json" : undefined,
 			hudScreenUI: config.MATERIAL_LIST_ENABLED? "ui/hud_screen.json" : undefined,
 			customEmojiFont: "font/glyph_E2.png",
-			languagesDotJson: "texts/languages.json" // Este é o array de idiomas, não o arquivo .lang
+			languagesDotJson: "texts/languages.json"
 		},
 		resources: {
 			entityFile: "entity/armor_stand.entity.json",
@@ -457,7 +457,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		totalBlocksToValidateByStructureByLayer.push(blocksToValidateByLayer);
 	});
 	
-	entityDescription["materials"]["hologram"] = "holoprint_hologram"; // Manter 'holoprint' aqui ou renomear para 'hololab'? Por enquanto, mantido.
+	entityDescription["materials"]["hologram"] = "holoprint_hologram";
 	entityDescription["materials"]["hologram.wrong_block_overlay"] = "holoprint_hologram.wrong_block_overlay";
 	entityDescription["textures"]["hologram.overlay"] = "textures/entity/overlay";
 	entityDescription["textures"]["hologram.save_icon"] = "textures/particle/save_icon";
@@ -573,7 +573,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	
 	// Modificações do Manifest
 	manifest["header"]["name"] = `${packName} - §l§bHolo§dLab§r`;
-    manifest["header"]["description"] = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r"; // Descrição principal visível no jogo
+    manifest["header"]["description"] = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
 	manifest["header"]["uuid"] = crypto.randomUUID();
 	let packVersion = VERSION.match(/^HoloLab v(\d+)\.(\d+)\.(\d+)$|^HoloLab (\w+)$/)?.slice(1)?.map(x => x ? (isNaN(parseInt(x)) ? 0 : +x) : 0) ?? [1, 0, 0];
     if (VERSION.endsWith(" dev") || VERSION.endsWith(" testing")) packVersion = [1,0,0]; 
@@ -611,17 +611,9 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	let itemTags = config.RENAME_CONTROL_ITEMS || config.RETEXTURE_CONTROL_ITEMS? await pmmpBedrockDataFetcher.fetch("item_tags.json").then(res => res.json()) : undefined;
 	let { inGameControls, controlItemTranslations } = controlsHaveBeenCustomised || config.RENAME_CONTROL_ITEMS? await translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, resourceLangFiles, itemTags) : {};
 	
-	const disabledFeatureTranslations = { 
-		"SPAWN_ANIMATION_ENABLED": "spawn_animation_disabled",
-		"PLAYER_CONTROLS_ENABLED": "player_controls_disabled",
-		"MATERIAL_LIST_ENABLED": "material_list_disabled",
-		"RETEXTURE_CONTROL_ITEMS": "retextured_control_items_disabled",
-		"RENAME_CONTROL_ITEMS": "renamed_control_items_disabled"
-	};
 	let languageFiles = await Promise.all(languagesDotJson.map(async language => {
 		let languageFile = (await fetch(`packTemplate/texts/${language}.lang`).then(res => res.text())).replaceAll("\r\n", "\n"); 
 		
-        // Substitui completamente a linha pack.description
         const newPackDescriptionForLang = "pack.description=§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
         if (languageFile.match(/^pack\.description=.*$/m)) {
             languageFile = languageFile.replace(/^pack\.description=.*$/m, newPackDescriptionForLang);
