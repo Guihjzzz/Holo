@@ -44,7 +44,7 @@ export const DEFAULT_PLAYER_CONTROLS = {
 };
 
 const HOLOGRAM_LAYER_MODES = createNumericEnum(["SINGLE", "ALL_BELOW"]);
-const FIXED_PACK_ICON_PATH = "guihjzzz.png"; // Alterado para caminho local
+const FIXED_PACK_ICON_PATH = "guihjzzz.png";
 
 /**
  * Makes a HoloLab resource pack from a structure file.
@@ -75,7 +75,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	
     let packIconBlob;
     try {
-        const response = await fetch(FIXED_PACK_ICON_PATH); // Busca o arquivo localmente
+        const response = await fetch(FIXED_PACK_ICON_PATH);
         if (!response.ok) throw new Error(`Failed to fetch fixed icon from ${FIXED_PACK_ICON_PATH}: ${response.statusText}`);
         packIconBlob = await response.blob();
     } catch (e) {
@@ -573,7 +573,28 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	
 	// Modificações do Manifest
 	manifest["header"]["name"] = `${packName} - §l§bHolo§dLab§r`;
-    manifest["header"]["description"] = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
+    
+    let materialListStringForManifest = finalisedMaterialLists["en_US"]
+        .map(({ translatedName, count }) => `${count} ${translatedName}`)
+        .join(", ");
+    
+    const MAX_DESC_LENGTH = 250; 
+    let devString = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
+    let fullDescription = `${devString}\n\n§lTotal block count: ${totalMaterialCount}\n§r${materialListStringForManifest}`;
+
+    if (fullDescription.length > MAX_DESC_LENGTH) {
+        let مواد_restantes = `... and more materials.`; 
+        let devStringLength = devString.length + `\n\n§lTotal block count: ${totalMaterialCount}\n§r`.length + مواد_restantes.length;
+        let materialListAllowedLength = MAX_DESC_LENGTH - devStringLength;
+        if (materialListAllowedLength > 0) {
+             materialListStringForManifest = materialListStringForManifest.substring(0, materialListAllowedLength -3) + "..."; 
+        } else {
+            materialListStringForManifest = ""; 
+        }
+        fullDescription = `${devString}\n\n§lTotal block count: ${totalMaterialCount}\n§r${materialListStringForManifest}${materialListStringForManifest ? مواد_restantes : ""}`;
+    }
+    manifest["header"]["description"] = fullDescription;
+
 	manifest["header"]["uuid"] = crypto.randomUUID();
 	let packVersion = VERSION.match(/^HoloLab v(\d+)\.(\d+)\.(\d+)$|^HoloLab (\w+)$/)?.slice(1)?.map(x => x ? (isNaN(parseInt(x)) ? 0 : +x) : 0) ?? [1, 0, 0];
     if (VERSION.endsWith(" dev") || VERSION.endsWith(" testing")) packVersion = [1,0,0]; 
@@ -587,7 +608,6 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
     manifest["metadata"]["url"] = "https://discord.gg/YTdKsTjnUy"; 
 	manifest["metadata"]["authors"] = ["HoloLab", "§r§cGUIHJZZZ", ...config.AUTHORS].filter(Boolean); 
     manifest["metadata"]["license"] = "CC BY-NC-SA 4.0";
-
 
     manifest["settings"] = []; 
 
@@ -623,7 +643,8 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
         
 		languageFile = languageFile.replaceAll("{PACK_NAME}", `${packName} - §l§bHolo§dLab§r`); 
 		
-		languageFile = languageFile.replaceAll(/^pack\.description\.(authors|description|disabled_features|controls)=.*$/mg, ""); 
+        languageFile = languageFile.replace("{MATERIAL_LIST}", ""); // Remover placeholder, pois agora está no manifest header
+		languageFile = languageFile.replaceAll(/^pack\.description\.(authors|description|disabled_features|controls|material_list_heading)=.*$/mg, ""); 
 		languageFile = languageFile.replaceAll(/\t*#.+/g, ""); 
         languageFile = languageFile.replace(/^\s*[\r\n]/gm, ""); 
 
