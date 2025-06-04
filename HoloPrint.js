@@ -86,7 +86,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	// Make the pack
 	let loadedStuff = await loadStuff({
 		packTemplate: {
-			manifest: "manifest.json",
+			manifest: "manifest.json", // Este é o template, será modificado abaixo
 			hologramRenderControllers: "render_controllers/armor_stand.hologram.render_controllers.json",
 			hologramGeo: "models/entity/armor_stand.hologram.geo.json", 
 			hologramMaterial: "materials/entity.material",
@@ -102,7 +102,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			terrainTexture: config.RETEXTURE_CONTROL_ITEMS? "textures/terrain_texture.json" : undefined,
 			hudScreenUI: config.MATERIAL_LIST_ENABLED? "ui/hud_screen.json" : undefined,
 			customEmojiFont: "font/glyph_E2.png",
-			languagesDotJson: "texts/languages.json"
+			languagesDotJson: "texts/languages.json" // Este é o array de idiomas, não o arquivo .lang
 		},
 		resources: {
 			entityFile: "entity/armor_stand.entity.json",
@@ -457,7 +457,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		totalBlocksToValidateByStructureByLayer.push(blocksToValidateByLayer);
 	});
 	
-	entityDescription["materials"]["hologram"] = "holoprint_hologram";
+	entityDescription["materials"]["hologram"] = "holoprint_hologram"; // Manter 'holoprint' aqui ou renomear para 'hololab'? Por enquanto, mantido.
 	entityDescription["materials"]["hologram.wrong_block_overlay"] = "holoprint_hologram.wrong_block_overlay";
 	entityDescription["textures"]["hologram.overlay"] = "textures/entity/overlay";
 	entityDescription["textures"]["hologram.save_icon"] = "textures/particle/save_icon";
@@ -571,7 +571,9 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		hudScreenUI["material_list"]["size"][1] = finalisedMaterialList.length * 12 + 12; 
 	}
 	
-	manifest["header"]["name"] = `§l§bHolo§dLab §r- ${packName}`;
+	// Modificações do Manifest
+	manifest["header"]["name"] = `${packName} - §l§bHolo§dLab§r`;
+    manifest["header"]["description"] = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r"; // Descrição principal visível no jogo
 	manifest["header"]["uuid"] = crypto.randomUUID();
 	let packVersion = VERSION.match(/^HoloLab v(\d+)\.(\d+)\.(\d+)$|^HoloLab (\w+)$/)?.slice(1)?.map(x => x ? (isNaN(parseInt(x)) ? 0 : +x) : 0) ?? [1, 0, 0];
     if (VERSION.endsWith(" dev") || VERSION.endsWith(" testing")) packVersion = [1,0,0]; 
@@ -587,18 +589,8 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
     manifest["metadata"]["license"] = "CC BY-NC-SA 4.0";
 
 
-    manifest["settings"] = manifest["settings"] || []; 
-	if(config.DESCRIPTION) {
-		let labelsAndLinks = findLinksInDescription(config.DESCRIPTION);
-		labelsAndLinks.forEach(([label, link], i) => {
-			manifest["settings"].push({
-				"type": "input",
-				"text": label,
-				"default": link,
-				"name": `desc_link_${i}` 
-			});
-		});
-	}
+    manifest["settings"] = []; 
+
     manifest["settings"].push(
         {
             "type": "input",
@@ -629,14 +621,15 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	let languageFiles = await Promise.all(languagesDotJson.map(async language => {
 		let languageFile = (await fetch(`packTemplate/texts/${language}.lang`).then(res => res.text())).replaceAll("\r\n", "\n"); 
 		
-        const newPackDescription = "pack.description=§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
+        // Substitui completamente a linha pack.description
+        const newPackDescriptionForLang = "pack.description=§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
         if (languageFile.match(/^pack\.description=.*$/m)) {
-            languageFile = languageFile.replace(/^pack\.description=.*$/m, newPackDescription);
+            languageFile = languageFile.replace(/^pack\.description=.*$/m, newPackDescriptionForLang);
         } else {
-            languageFile = newPackDescription + "\n" + languageFile;
+            languageFile = newPackDescriptionForLang + "\n" + languageFile;
         }
         
-		languageFile = languageFile.replaceAll("{PACK_NAME}", `§l§bHolo§dLab §r - ${packName}`); 
+		languageFile = languageFile.replaceAll("{PACK_NAME}", `${packName} - §l§bHolo§dLab§r`); 
 		
 		languageFile = languageFile.replaceAll(/^pack\.description\.(authors|description|disabled_features|controls)=.*$/mg, ""); 
 		languageFile = languageFile.replaceAll(/\t*#.+/g, ""); 
