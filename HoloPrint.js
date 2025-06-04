@@ -11,8 +11,8 @@ import { addPaddingToImage, arrayMin, awaitAllEntries, CachingFetcher, concatena
 import ResourcePackStack from "./ResourcePackStack.js";
 import BlockUpdater from "./BlockUpdater.js";
 
-export const VERSION = "dev";
-export const IGNORED_BLOCKS = ["air", "piston_arm_collision", "sticky_piston_arm_collision"]; // blocks to be ignored when scanning the structure file
+export const VERSION = "HoloLab dev";
+export const IGNORED_BLOCKS = ["air", "piston_arm_collision", "sticky_piston_arm_collision"];
 const IGNORED_BLOCK_ENTITIES = ["Beacon", "Beehive", "Bell", "BrewingStand", "ChiseledBookshelf", "CommandBlock", "Comparator", "Conduit", "EnchantTable", "EndGateway", "JigsawBlock", "Lodestone", "SculkCatalyst", "SculkShrieker", "SculkSensor", "CalibratedSculkSensor", "StructureBlock", "BrushableBlock", "TrialSpawner", "Vault"];
 export const PLAYER_CONTROL_NAMES = {
 	TOGGLE_RENDERING: "player_controls.toggle_rendering",
@@ -44,9 +44,10 @@ export const DEFAULT_PLAYER_CONTROLS = {
 };
 
 const HOLOGRAM_LAYER_MODES = createNumericEnum(["SINGLE", "ALL_BELOW"]);
+const FIXED_PACK_ICON_PATH = "guihjzzz.png";
 
 /**
- * Makes a HoloPrint resource pack from a structure file.
+ * Makes a HoloLab resource pack from a structure file.
  * @param {File|Array<File>} structureFiles Either a singular structure file (`*.mcstructure`), or an array of structure files
  * @param {HoloPrintConfig} [config]
  * @param {ResourcePackStack} [resourcePackStack]
@@ -54,7 +55,7 @@ const HOLOGRAM_LAYER_MODES = createNumericEnum(["SINGLE", "ALL_BELOW"]);
  * @returns {Promise<File>} Resource pack (`*.mcpack`)
  */
 export async function makePack(structureFiles, config = {}, resourcePackStack, previewCont) {
-	console.info(`Running HoloPrint ${VERSION}`);
+	console.info(`Running HoloLab ${VERSION}`);
 	if(!resourcePackStack) {
 		console.debug("Waiting for resource pack stack initialisation...");
 		resourcePackStack = await new ResourcePackStack();
@@ -69,15 +70,25 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	let nbts = await Promise.all(structureFiles.map(structureFile => readStructureNBT(structureFile)));
 	console.info("Finished reading structure NBTs!");
 	console.log("NBTs:", nbts);
-	let structureSizes = nbts.map(nbt => nbt["size"].map(x => +x)); // Stored as Number instances: https://github.com/Offroaders123/NBTify/issues/50
+	let structureSizes = nbts.map(nbt => nbt["size"].map(x => +x));
 	let packName = config.PACK_NAME ?? getDefaultPackName(structureFiles);
 	
+    let packIconBlob;
+    try {
+        const response = await fetch(FIXED_PACK_ICON_PATH);
+        if (!response.ok) throw new Error(`Failed to fetch fixed icon from ${FIXED_PACK_ICON_PATH}: ${response.statusText}`);
+        packIconBlob = await response.blob();
+    } catch (e) {
+        console.warn(`Could not load fixed pack icon from ${FIXED_PACK_ICON_PATH}: ${e}. Falling back to dynamic/form icon.`);
+        packIconBlob = config.PACK_ICON_BLOB ?? await makePackIconFallback(concatenateFiles(structureFiles));
+    }
+
 	// Make the pack
 	let loadedStuff = await loadStuff({
 		packTemplate: {
-			manifest: "manifest.json",
+			manifest: "manifest.json", // Este é o template, será modificado abaixo
 			hologramRenderControllers: "render_controllers/armor_stand.hologram.render_controllers.json",
-			hologramGeo: "models/entity/armor_stand.hologram.geo.json", // this is where we put all the ghost blocks
+			hologramGeo: "models/entity/armor_stand.hologram.geo.json", 
 			hologramMaterial: "materials/entity.material",
 			hologramAnimationControllers: "animation_controllers/armor_stand.hologram.animation_controllers.json",
 			hologramAnimations: "animations/armor_stand.hologram.animation.json",
@@ -91,7 +102,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			terrainTexture: config.RETEXTURE_CONTROL_ITEMS? "textures/terrain_texture.json" : undefined,
 			hudScreenUI: config.MATERIAL_LIST_ENABLED? "ui/hud_screen.json" : undefined,
 			customEmojiFont: "font/glyph_E2.png",
-			languagesDotJson: "texts/languages.json"
+			languagesDotJson: "texts/languages.json" // Este é o array de idiomas, não o arquivo .lang
 		},
 		resources: {
 			entityFile: "entity/armor_stand.entity.json",
@@ -99,18 +110,18 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			resourceItemTexture: config.RETEXTURE_CONTROL_ITEMS? "textures/item_texture.json" : undefined
 		},
 		otherFiles: {
-			packIcon: config.PACK_ICON_BLOB ?? makePackIcon(concatenateFiles(structureFiles)),
+			packIcon: packIconBlob, 
 			itemIcons: config.RETEXTURE_CONTROL_ITEMS? fetch("data/itemIcons.json").then(res => res.jsonc()) : undefined
 		},
-		data: { // these will not be put into the pack
+		data: { 
 			blockMetadata: "metadata/vanilladata_modules/mojang-blocks.json",
 			itemMetadata: "metadata/vanilladata_modules/mojang-items.json"
 		}
 	}, resourcePackStack);
 	let { manifest, packIcon, entityFile, hologramRenderControllers, defaultPlayerRenderControllers, hologramGeo, hologramMaterial, hologramAnimationControllers, hologramAnimations, boundingBoxOutlineParticle, blockValidationParticle, savingBackupParticle, singleWhitePixelTexture, exclamationMarkTexture, saveIconTexture, itemTexture, hudScreenUI, customEmojiFont, languagesDotJson, resourceItemTexture, terrainTexture, itemIcons } = loadedStuff.files;
 	let { blockMetadata, itemMetadata } = loadedStuff.data;
-	let resourceLangFiles = (await loadStuff({
-		resources: Object.fromEntries(languagesDotJson.map(language => [language, `texts/${language}.lang`])) // load the language file resources for each language
+	let resourceLangFiles = (await loadStuff({ // Carrega os ARQUIVOS .lang REAIS dos templates
+		resources: Object.fromEntries(languagesDotJson.map(language => [language, `packTemplate/texts/${language}.lang`])) 
 	}, resourcePackStack)).files;
 	
 	let structures = nbts.map(nbt => nbt["structure"]);
@@ -126,7 +137,6 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	window.blockIndices = allStructureIndicesByLayer;
 	
 	let blockGeoMaker = await new BlockGeoMaker(config);
-	// makeBoneTemplate() is an impure function and adds texture references to the textureRefs set property.
 	let boneTemplatePalette = blockPalette.map(block => blockGeoMaker.makeBoneTemplate(block));
 	console.info("Finished making block geometry templates!");
 	console.log("Block geo maker:", blockGeoMaker);
@@ -134,9 +144,9 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	
 	let textureAtlas = await new TextureAtlas(config, resourcePackStack);
 	let textureRefs = [...blockGeoMaker.textureRefs];
-	await textureAtlas.makeAtlas(textureRefs); // each texture reference will get added to the textureUvs array property
+	await textureAtlas.makeAtlas(textureRefs); 
 	let textureBlobs = textureAtlas.imageBlobs;
-	let defaultTextureIndex = max(textureBlobs.length - 3, 0); // default to 80% opacity
+	let defaultTextureIndex = max(textureBlobs.length - 3, 0); 
 	
 	console.log("Texture UVs:", textureAtlas.textures);
 	boneTemplatePalette.forEach(boneTemplate => {
@@ -158,11 +168,11 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 				};
 				if("crop" in imageUv) {
 					let crop = imageUv["crop"];
-					let cropXRem = 1 - crop["w"] - crop["x"]; // remaining horizontal space on the other side of the cropped region
+					let cropXRem = 1 - crop["w"] - crop["x"]; 
 					let cropYRem = 1 - crop["h"] - crop["y"];
 					if(cube["size"][0] == 0) {
 						cube["origin"][2] += cube["size"][2] * (face["flip_horizontally"]? cropXRem : crop["x"]);
-						cube["origin"][1] += cube["size"][1] * (face["flip_vertically"]? crop["y"] : cropYRem); // the latter term is the distance from the bottom of the texture, which is upwards direction in 3D space.
+						cube["origin"][1] += cube["size"][1] * (face["flip_vertically"]? crop["y"] : cropYRem); 
 						cube["size"][2] *= crop["w"];
 						cube["size"][1] *= crop["h"];
 					} else if(cube["size"][1] == 0) {
@@ -195,7 +205,6 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	let structureDMolang = arrayToMolang(structureSizes.map(structureSize => structureSize[2]), "v.hologram.structure_index");
 	
 	if(!config.SPAWN_ANIMATION_ENABLED) {
-		// Totally empty animation
 		delete hologramAnimations["animations"]["animation.armor_stand.hologram.spawn"]["loop"];
 		delete hologramAnimations["animations"]["animation.armor_stand.hologram.spawn"]["bones"];
 	}
@@ -247,7 +256,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			let totalVolume = structureSize.reduce((a, b) => a * b);
 			let totalAnimationLength = 0;
 			getSpawnAnimationDelay = (x, y, z) => {
-				let randomness = 2 - 1.9 * exp(-0.005 * totalVolume); // 100 -> ~0.85, 1000 -> ~1.99, asymptotic to 2
+				let randomness = 2 - 1.9 * exp(-0.005 * totalVolume); 
 				return config.SPAWN_ANIMATION_LENGTH * 0.25 * (structureSize[0] - x + y + structureSize[2] - z + Math.random() * randomness);
 			};
 			animationTimingFunc = x => 1 - (1 - x) ** 3;
@@ -255,11 +264,11 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 				let animationEnd = Number((delay + config.SPAWN_ANIMATION_LENGTH).toFixed(2));
 				totalAnimationLength = max(totalAnimationLength, animationEnd);
 				hologramAnimations["animations"]["animation.armor_stand.hologram.spawn"]["animation_length"] = totalAnimationLength;
-				let keyframes = [0, 0.2, 0.4, 0.6, 0.8, 1]; // this is smooth enough
+				let keyframes = [0, 0.2, 0.4, 0.6, 0.8, 1]; 
 				let positionOffset = [-bonePos[0] - 8, -bonePos[1], -bonePos[2] - 8];
 				let createAnimFromKeyframes = timingFunc => Object.fromEntries(keyframes.map(keyframe => [`${+(delay + keyframe * config.SPAWN_ANIMATION_LENGTH).toFixed(2)}`, timingFunc(keyframe)]));
 				return {
-					"scale": createAnimFromKeyframes(keyframe => (new Array(3)).fill(+animationTimingFunc(keyframe).toFixed(2))), // has to be an array here...
+					"scale": createAnimFromKeyframes(keyframe => (new Array(3)).fill(+animationTimingFunc(keyframe).toFixed(2))), 
 					"position": createAnimFromKeyframes(keyframe => positionOffset.map(x => +(x * (1 - animationTimingFunc(keyframe))).toFixed(2)))
 				};
 			};
@@ -305,7 +314,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 				delete layerAnimation["bones"];
 			}
 			entityDescription["animations"][`hologram.l_${y}`] = `animation.armor_stand.hologram.l_${y}`;
-			if(y < topLayer) { // top layer with all layers below is the default view, so the animation + animation controller state doesn't need to be made for it
+			if(y < topLayer) { 
 				layerAnimationStates[`${layerName}-`] = {
 					"animations": [`hologram.l_${y}-`],
 					"blend_transition": 0.1,
@@ -342,11 +351,11 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 				entityDescription["animations"][`hologram.l_${y}-`] = `animation.armor_stand.hologram.l_${y}-`;
 			}
 			
-			let blocksToValidateCurrentLayer = 0; // "layer" in here refers to y-coordinate, NOT structure layer
+			let blocksToValidateCurrentLayer = 0; 
 			for(let x = 0; x < structureSize[0]; x++) {
 				for(let z = 0; z < structureSize[2]; z++) {
 					let blockI = (x * structureSize[1] + y) * structureSize[2] + z;
-					let firstBoneForThisCoordinate = true; // second-layer blocks (e.g. water in waterlogged blocks) will be at the same position
+					let firstBoneForThisCoordinate = true; 
 					structureIndicesByLayer.forEach((blockPaletteIndices, layerI) => {
 						let paletteI = blockPaletteIndices[blockI];
 						if(!(paletteI in boneTemplatePalette)) {
@@ -356,7 +365,6 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 							return;
 						}
 						let boneTemplate = boneTemplatePalette[paletteI];
-						// console.table({x, y, z, i, paletteI, boneTemplate});
 						
 						let blockCoordinateName = `b_${x}_${y}_${z}`;
 						let boneName = blockCoordinateName;
@@ -364,23 +372,23 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 							boneName += `_${layerI}`;
 						}
 						if(config.SPAWN_ANIMATION_ENABLED && structureI == 0 && structureFiles.length > 1) {
-							boneName += "_a"; // different bone name in order for the animation to not affect blocks in the same position in other structures
+							boneName += "_a"; 
 						}
-						let bonePos = [-16 * x - 8, 16 * y, 16 * z - 8]; // I got these values from trial and error with blockbench (which makes the x negative I think. it's weird.)
+						let bonePos = [-16 * x - 8, 16 * y, 16 * z - 8]; 
 						let positionedBoneTemplate = blockGeoMaker.positionBoneTemplate(boneTemplate, bonePos);
 						let bonesToAdd = [{
 							"name": boneName,
 							"parent": layerName,
-							"pivot": bonePos.map(x => x + 8), // prevent flickering
+							"pivot": bonePos.map(x => x + 8), 
 							...positionedBoneTemplate
 						}];
 						let rotWrapperBones = new JSONMap();
 						let extraRotCounter = 0;
 						bonesToAdd[0]["cubes"] = bonesToAdd[0]["cubes"].filter(cube => {
-							if("extra_rots" in cube) { // cubes that copy with rotation in both the cube and the copied cube need wrapper bones to handle multiple rotations
+							if("extra_rots" in cube) { 
 								let extraRots = cube["extra_rots"];
 								delete cube["extra_rots"];
-								if(!rotWrapperBones.has(extraRots)) { // some rotations may be the same, so we use a map to cache the wrapper bone this cube should be added to
+								if(!rotWrapperBones.has(extraRots)) { 
 									let wrapperBones = [];
 									let parentBoneName = boneName;
 									extraRots.forEach(extraRot => {
@@ -405,7 +413,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 						});
 						geo["bones"].push(...bonesToAdd);
 						
-						if(firstBoneForThisCoordinate) { // we only need 1 locator for each block position, even though there may be 2 bones in this position because of the 2nd layer
+						if(firstBoneForThisCoordinate) { 
 							hologramGeo["minecraft:geometry"][2]["bones"][1]["locators"][blockCoordinateName] ??= bonePos.map(x => x + 8);
 						}
 						if(config.SPAWN_ANIMATION_ENABLED && structureI == 0) {
@@ -416,7 +424,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 						if(!config.IGNORED_MATERIAL_LIST_BLOCKS.includes(block["name"])) {
 							materialList.add(block);
 						}
-						if(layerI == 0) { // particle_expire_if_in_blocks only works on the first layer :(
+						if(layerI == 0) { 
 							blocksToValidate.push({
 								"locator": blockCoordinateName,
 								"block": block["name"],
@@ -464,7 +472,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	entityDescription["animations"]["controller.hologram.saving_backup_particles"] = "controller.animation.armor_stand.hologram.saving_backup_particles";
 	entityDescription["scripts"]["animate"] ??= [];
 	entityDescription["scripts"]["animate"].push("hologram.align", "hologram.offset", "hologram.wrong_block_overlay", "controller.hologram.spawn_animation", "controller.hologram.layers", "controller.hologram.bounding_box", "controller.hologram.block_validation", "controller.hologram.saving_backup_particles");
-	entityDescription["scripts"]["should_update_bones_and_effects_offscreen"] = true; // makes backups work when offscreen (from my testing it helps a bit). this also makes it render when you're facing away, removing the need for visible_bounds_width/visible_bounds_height in the geometry file. (when should_update_effects_offscreen is set, it renders when facing away, but doesn't seem to have access to v. variables.)
+	entityDescription["scripts"]["should_update_bones_and_effects_offscreen"] = true; 
 	entityDescription["scripts"]["initialize"] ??= [];
 	entityDescription["scripts"]["initialize"].push(functionToMolang(entityScripts.armorStandInitialization, {
 		structureSize: structureSizes[0],
@@ -507,8 +515,8 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		"controller.render.armor_stand.hologram.valid_structure_overlay": "v.hologram.validating && v.wrong_blocks == 0"
 	}, "controller.render.armor_stand.hologram.particle_alignment");
 	entityDescription["particle_effects"] ??= {};
-	entityDescription["particle_effects"]["bounding_box_outline"] = "holoprint:bounding_box_outline";
-	entityDescription["particle_effects"]["saving_backup"] = "holoprint:saving_backup";
+	entityDescription["particle_effects"]["bounding_box_outline"] = "hololab:bounding_box_outline";
+	entityDescription["particle_effects"]["saving_backup"] = "hololab:saving_backup";
 	
 	textureBlobs.forEach(([textureName]) => {
 		entityDescription["textures"][textureName] = `textures/entity/${textureName}`;
@@ -527,23 +535,21 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	
 	let totalMaterialCount = materialList.totalMaterialCount;
 	
-	// add the particles' short names, and then reference them in the animation controller
 	uniqueBlocksToValidate.forEach(blockName => {
 		let particleName = `validate_${blockName.replace(":", ".")}`;
-		entityDescription["particle_effects"][particleName] = `holoprint:${particleName}`;
+		entityDescription["particle_effects"][particleName] = `hololab:${particleName}`;
 	});
 	
 	let playerRenderControllers = defaultPlayerRenderControllers && addPlayerControlsToRenderControllers(config, defaultPlayerRenderControllers);
 	
 	console.log("Block counts map:", materialList.materials);
 	let finalisedMaterialLists = Object.fromEntries(languagesDotJson.map(language => {
-		materialList.setLanguage(resourceLangFiles[language]); // we could make the material list export to multiple languages simultaneously, but I'm assuming here that there could be gaps between language files so they have to be done separately (for whatever reason... maybe international relations deteriorate and they refuse to translate the new update to Chinese... idk)
+		materialList.setLanguage(resourceLangFiles[language]); 
 		return [language, materialList.export()];
 	}));
-	let finalisedMaterialList = finalisedMaterialLists["en_US"]; // all languages have the same translation keys, which are used in the material list UI. the translated item names (which are different for every language) are used in the pack description only.
+	let finalisedMaterialList = finalisedMaterialLists["en_US"]; 
 	console.log("Finalised material list:", finalisedMaterialList);
 	
-	// console.log(partitionedBlockCounts);
 	let highestItemCount;
 	if(config.MATERIAL_LIST_ENABLED) {
 		let missingItemAux = blockMetadata["data_items"].find(block => block.name == "minecraft:reserved6")?.["raw_id"] ?? 0;
@@ -559,34 +565,45 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		let longestItemNameLength = max(...finalisedMaterialList.map(({ translatedName }) => translatedName.length));
 		let longestCountLength = max(...finalisedMaterialList.map(({ partitionedCount }) => partitionedCount.length));
 		if(longestItemNameLength + longestCountLength >= 43) {
-			hudScreenUI["material_list"]["size"][0] = "50%"; // up from 40%
+			hudScreenUI["material_list"]["size"][0] = "50%"; 
 			hudScreenUI["material_list"]["max_size"][0] = "50%";
 		}
-		hudScreenUI["material_list"]["size"][1] = finalisedMaterialList.length * 12 + 12; // 12px for each item + 12px for the heading
-		hudScreenUI["material_list_entry"]["controls"][0]["content"]["controls"][3]["item_name"]["size"][0] += `${round(longestCountLength * 4.2 + 10)}px`;
+		hudScreenUI["material_list"]["size"][1] = finalisedMaterialList.length * 12 + 12; 
 	}
 	
-	manifest["header"]["name"] = packName;
+	// Modificações do Manifest
+	manifest["header"]["name"] = `${packName} - §l§bHolo§dLab§r`; // Nome do pacote visível
+    manifest["header"]["description"] = "pack.description"; // Aponta para a chave de tradução
 	manifest["header"]["uuid"] = crypto.randomUUID();
-	let packVersion = VERSION.match(/^v(\d+)\.(\d+)\.(\d+)$/)?.slice(1)?.map(x => +x) ?? [1, 0, 0];
-	manifest["header"]["version"] = packVersion;
+	let packVersionToUse = VERSION.match(/^HoloLab v(\d+)\.(\d+)\.(\d+)$|^HoloLab (\w+)$/)?.slice(1)?.map(x => x ? (isNaN(parseInt(x)) ? 0 : +x) : 0) ?? [1, 0, 0];
+    if (VERSION.endsWith(" dev") || VERSION.endsWith(" testing")) packVersionToUse = [1,0,0]; 
+    
+	manifest["header"]["version"] = packVersionToUse;
 	manifest["modules"][0]["uuid"] = crypto.randomUUID();
-	manifest["modules"][0]["version"] = packVersion;
-	manifest["metadata"]["generated_with"]["holoprint"] = [packVersion.join(".")];
-	if(config.AUTHORS.length) {
-		manifest["metadata"]["authors"].push(...config.AUTHORS);
-	}
-	if(config.DESCRIPTION) {
-		let labelsAndLinks = findLinksInDescription(config.DESCRIPTION);
-		labelsAndLinks.forEach(([label, link], i) => {
-			manifest["settings"].push({
-				"type": "input",
-				"text": label,
-				"default": link,
-				"name": `link_${i}`
-			});
-		});
-	}
+	manifest["modules"][0]["version"] = packVersionToUse;
+    manifest["modules"][0]["description"] = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz"; 
+
+	manifest["metadata"]["generated_with"] = {"HoloLab": [VERSION]}; 
+    manifest["metadata"]["url"] = "https://discord.gg/YTdKsTjnUy"; 
+	manifest["metadata"]["authors"] = ["HoloLab", "§r§cGUIHJZZZ", ...config.AUTHORS].filter(Boolean); 
+    manifest["metadata"]["license"] = "CC BY-NC-SA 4.0";
+
+    manifest["settings"] = []; 
+
+    manifest["settings"].push(
+        {
+            "type": "input",
+            "text": "§bTIK§dTOK:", 
+            "default": "https://www.tiktok.com/@guihjzzz?_t=ZM-8vawBdE0Ew2&_r=1",
+            "name": "tiktok" 
+        },
+        {
+            "type": "input",
+            "text": "Generated by §r§uDISCORD:", 
+            "default": "https://discord.gg/YTdKsTjnUy",
+            "name": "discord" 
+        }
+    );
 	
 	let controlsHaveBeenCustomised = JSON.stringify(config.CONTROLS) != JSON.stringify(DEFAULT_PLAYER_CONTROLS);
 	let pmmpBedrockDataFetcher = config.RENAME_CONTROL_ITEMS || config.RETEXTURE_CONTROL_ITEMS? await createPmmpBedrockDataFetcher() : undefined;
@@ -594,57 +611,82 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	let { inGameControls, controlItemTranslations } = controlsHaveBeenCustomised || config.RENAME_CONTROL_ITEMS? await translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, resourceLangFiles, itemTags) : {};
 	
 	let packGenerationTime = (new Date()).toLocaleString();
-	const disabledFeatureTranslations = { // these look at the .lang RP files
+	const disabledFeatureTranslations = { 
 		"SPAWN_ANIMATION_ENABLED": "spawn_animation_disabled",
 		"PLAYER_CONTROLS_ENABLED": "player_controls_disabled",
 		"MATERIAL_LIST_ENABLED": "material_list_disabled",
 		"RETEXTURE_CONTROL_ITEMS": "retextured_control_items_disabled",
 		"RENAME_CONTROL_ITEMS": "renamed_control_items_disabled"
 	};
+
 	let languageFiles = await Promise.all(languagesDotJson.map(async language => {
-		let languageFile = (await fetch(`packTemplate/texts/${language}.lang`).then(res => res.text())).replaceAll("\r\n", "\n"); // I hate windows sometimes (actually quite often now because of windows 11)
-		languageFile = languageFile.replaceAll("{PACK_NAME}", packName);
-		languageFile = languageFile.replaceAll("{PACK_GENERATION_TIME}", packGenerationTime);
-		languageFile = languageFile.replaceAll("{TOTAL_MATERIAL_COUNT}", totalMaterialCount);
-		languageFile = languageFile.replaceAll("{MATERIAL_LIST}", finalisedMaterialLists[language].map(({ translatedName, count }) => `${count} ${translatedName}`).join(", "));
+		let langFileContent = resourceLangFiles[language]; // Pega o conteúdo do template .lang carregado anteriormente
+
+		langFileContent = langFileContent.replaceAll("{PACK_NAME}", `${packName} - §l§bHolo§dLab§r`);
+		langFileContent = langFileContent.replaceAll("{PACK_GENERATION_TIME}", packGenerationTime);
+		langFileContent = langFileContent.replaceAll("{TOTAL_MATERIAL_COUNT}", totalMaterialCount);
 		
-		// now substitute in the extra bits into the main description if needed
+        let materialListForThisLang = finalisedMaterialLists[language]
+            .map(({ translatedName, partitionedCount }) => `${partitionedCount} ${translatedName}`) // Usar partitionedCount
+            .join(", ");
+        
+        const MAX_LANG_MATERIAL_LIST_LENGTH = 180; // Um pouco menor para .lang, considerando outros textos.
+        if (materialListForThisLang.length > MAX_LANG_MATERIAL_LIST_LENGTH) {
+            let andMoreMaterialsKey = "pack.description.and_more_materials";
+            let andMoreMaterialsText = translate(andMoreMaterialsKey, language) || "..."; // Fallback simples
+            materialListForThisLang = materialListForThisLang.substring(0, MAX_LANG_MATERIAL_LIST_LENGTH - andMoreMaterialsText.length) + andMoreMaterialsText;
+        }
+        langFileContent = langFileContent.replaceAll("{MATERIAL_LIST}", materialListForThisLang);
+		
 		if(config.AUTHORS.length) {
-			languageFile = languageFile.replaceAll(/\{STRUCTURE_AUTHORS\[([^)]+)\]\}/g, (useless, delimiter) => config.AUTHORS.join(delimiter));
-			languageFile = languageFile.replaceAll("{AUTHORS_SECTION}", languageFile.match(/pack\.description\.authors=([^\t#\n]+)/)[1]);
+			langFileContent = langFileContent.replaceAll(/\{STRUCTURE_AUTHORS\[([^)]+)\]\}/g, (useless, delimiter) => config.AUTHORS.join(delimiter));
+			langFileContent = langFileContent.replaceAll("{AUTHORS_SECTION}", translate("pack.description.authors_template", language) || "");
 		} else {
-			languageFile = languageFile.replaceAll("{AUTHORS_SECTION}", "");
+			langFileContent = langFileContent.replaceAll("{AUTHORS_SECTION}", "");
 		}
+
 		if(config.DESCRIPTION) {
-			languageFile = languageFile.replaceAll("{DESCRIPTION}", config.DESCRIPTION.replaceAll("\n", "\\n"));
-			languageFile = languageFile.replaceAll("{DESCRIPTION_SECTION}", languageFile.match(/pack\.description\.description=([^\t#\n]+)/)[1]);
+			langFileContent = langFileContent.replaceAll("{DESCRIPTION}", config.DESCRIPTION.replaceAll("\n", "\\n"));
+			langFileContent = langFileContent.replaceAll("{DESCRIPTION_SECTION}", translate("pack.description.user_description_template", language) || "");
 		} else {
-			languageFile = languageFile.replaceAll("{DESCRIPTION_SECTION}", "");
+			langFileContent = langFileContent.replaceAll("{DESCRIPTION_SECTION}", "");
 		}
-		let translatedDisabledFeatures = Object.entries(disabledFeatureTranslations).filter(([feature]) => !config[feature]).map(([feature, translationKey]) => languageFile.match(new RegExp(`pack\\.description\\.${translationKey}=([^\\t#\\n]+)`))[1]).join("\\n");
+
+		let translatedDisabledFeatures = Object.entries(disabledFeatureTranslations)
+            .filter(([feature]) => !config[feature])
+            .map(([_, translationKey]) => translate(translationKey, language))
+            .filter(Boolean) // Remove undefined/null
+            .join("\\n");
+
 		if(translatedDisabledFeatures) {
-			languageFile = languageFile.replaceAll("{DISABLED_FEATURES}", translatedDisabledFeatures);
-			languageFile = languageFile.replaceAll("{DISABLED_FEATURES_SECTION}", languageFile.match(/pack\.description\.disabled_features=([^\t#\n]+)/)[1]);
+			langFileContent = langFileContent.replaceAll("{DISABLED_FEATURES}", translatedDisabledFeatures);
+			langFileContent = langFileContent.replaceAll("{DISABLED_FEATURES_SECTION}", translate("pack.description.disabled_features_template", language) || "");
 		} else {
-			languageFile = languageFile.replaceAll("{DISABLED_FEATURES_SECTION}", "");
+			langFileContent = langFileContent.replaceAll("{DISABLED_FEATURES_SECTION}", "");
 		}
-		if(controlsHaveBeenCustomised) {
-			languageFile = languageFile.replaceAll("{CONTROLS}", inGameControls[language].replaceAll("\n", "\\n"));
-			languageFile = languageFile.replaceAll("{CONTROLS_SECTION}", languageFile.match(/pack\.description\.controls=([^\t#\n]+)/)[1]);
+
+		if(controlsHaveBeenCustomised && inGameControls && inGameControls[language]) {
+			langFileContent = langFileContent.replaceAll("{CONTROLS}", inGameControls[language].replaceAll("\n", "\\n"));
+			langFileContent = langFileContent.replaceAll("{CONTROLS_SECTION}", translate("pack.description.controls_template", language) || "");
 		} else {
-			languageFile = languageFile.replaceAll("{CONTROLS_SECTION}", "");
+			langFileContent = langFileContent.replaceAll("{CONTROLS_SECTION}", "");
 		}
 		
-		languageFile = languageFile.replaceAll(/pack\.description\..+\s*/g, ""); // remove all the description template sections
-		languageFile = languageFile.replaceAll(/\t*#.+/g, ""); // remove comments
-		
-		if(config.RENAME_CONTROL_ITEMS) {
-			languageFile += controlItemTranslations[language];
+		// Limpeza final de placeholders não substituídos (caso as chaves de template tenham sido removidas)
+        langFileContent = langFileContent.replace(/{AUTHORS_SECTION}|{DESCRIPTION_SECTION}|{DISABLED_FEATURES_SECTION}|{CONTROLS_SECTION}/g, "");
+		langFileContent = langFileContent.replaceAll(/\t*#.+/g, ""); 
+        langFileContent = langFileContent.replace(/^\s*[\r\n]/gm, ""); 
+
+		if(config.RENAME_CONTROL_ITEMS && controlItemTranslations && controlItemTranslations[language]) {
+			langFileContent += "\n" + controlItemTranslations[language]; 
 		}
 		
-		return [language, languageFile];
+		return [language, langFileContent.trim()]; 
 	}));
 	
+// ... (restante do código, incluindo a parte de RETEXTURE_CONTROL_ITEMS, zipping, etc.)
+// Nenhuma alteração necessária após a geração dos languageFiles para este problema específico.
+
 	let hasModifiedTerrainTexture = false;
 	let controlItemTextures = [];
 	if(config.RETEXTURE_CONTROL_ITEMS) {
@@ -652,9 +694,19 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		let loadingLegacyItemMappingsPromise;
 		let itemIconPatterns = Object.entries(itemIcons).filter(([key]) => key.startsWith("/") && key.endsWith("/")).map(([pattern, itemName]) => [new RegExp(pattern.slice(1, -1), "g"), itemName]);
 		await Promise.all(Object.entries(config.CONTROLS).map(async ([control, itemCriteria]) => {
-			let controlTexturePath = `textures/items/~${control.toLowerCase()}.png`; // because texture compositing works alphabetically not in array order, the ~ forces the control texture to always go on top of the actual item texture
-			let controlTexture = await fetch(`packTemplate/${controlTexturePath}`).then(res => res.toImage());
-			let paddedTexture = await addPaddingToImage(controlTexture, { // make it small in the top-left corner
+			let controlTexturePath = `textures/items/~${control.toLowerCase()}.png`; 
+			let controlTexture;
+            try {
+                controlTexture = await fetch(`packTemplate/${controlTexturePath}`).then(res => {
+                    if (!res.ok) throw new Error(`Failed to fetch ${controlTexturePath}`);
+                    return res.toImage();
+                });
+            } catch (e) {
+                console.warn(`Control item texture ${controlTexturePath} not found, skipping retexture for this control. Error: ${e}`);
+                return; 
+            }
+
+			let paddedTexture = await addPaddingToImage(controlTexture, { 
 				right: 16,
 				bottom: 16
 			});
@@ -696,13 +748,12 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 				} else {
 					loadingLegacyItemMappingsPromise ??= new Promise(async (res, rej) => {
 						try {
-							// these mappings are from the old ids to the new ids. we want to go the other way, because bugrock still uses some old ids in item_texture.json
 							legacyItemMappings = new Map();
 							let updateMappings = await pmmpBedrockDataFetcher.fetch("r16_to_current_item_map.json").then(res => res.json());
 							Object.entries(updateMappings["simple"]).forEach(([oldName, newName]) => {
-								legacyItemMappings.set(newName.slice(10), [oldName.slice(10), -1]); // first 10 characters are "minecraft:"
+								legacyItemMappings.set(newName.slice(10), [oldName.slice(10), -1]); 
 							});
-							Object.entries(updateMappings["complex"]).forEach(([oldName, newNames]) => { // complex mappings have indices, used in boats among others
+							Object.entries(updateMappings["complex"]).forEach(([oldName, newNames]) => { 
 								Object.entries(newNames).forEach(([index, newName]) => {
 									legacyItemMappings.set(newName.slice(10), [oldName.slice(10), index]);
 								});
@@ -729,10 +780,10 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 						console.warn(`Can't find control item texture for ${itemName} (${oldItemName})`);
 						return;
 					}
-					itemName = oldItemName; // if the legacy item id has a single item_texture.json texture, we're fine here - just use the old name
+					itemName = oldItemName; 
 				}
 				
-				if(Array.isArray(originalTexturePath)) { // if it's an array (like boats), we need to load the item texture and manually edit it here.
+				if(Array.isArray(originalTexturePath)) { 
 					if(variant == -1) {
 						console.warn(`Don't know which texture to use for control item texture for ${itemName}: [${originalTexturePath}]`);
 						return;
@@ -742,7 +793,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 						return;
 					}
 					itemTexture["texture_data"][itemName] ??= {
-						"textures": [...originalTexturePath] // clone the whole thing here. this is so we can edit it directly, which means that if we're modifying multiple textures in the same array all can be applied.
+						"textures": [...originalTexturePath] 
 					};
 					let specificOriginalTexturePath = `${itemTexture["texture_data"][itemName]["textures"][variant]}.png`;
 					let originalImage;
@@ -767,11 +818,11 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 							console.warn(`Could not load item texture ${originalTexturePath} for overlay texture scaling calculations!`, e);
 						}
 					}
-					let safeSize = lcm(paddedTexture.width, itemTextureSize) * config.CONTROL_ITEM_TEXTURE_SCALE; // When compositing textures, MCBE scales all textures to the maximum, so the size of the overlay control texture has to be the LCM of itself and in-game items. Hence, if in-game items have a higher resolution than expected, they will probably be scaled wrong. The control item texture scale setting will scale them more (but they get reaaaaally big and make the item texture atlas huuuge)
+					let safeSize = lcm(paddedTexture.width, itemTextureSize) * config.CONTROL_ITEM_TEXTURE_SCALE; 
 					controlItemTextureSizes.add(safeSize);
 					(usingTerrainAtlas? terrainTexture : itemTexture)["texture_data"][itemName] = {
 						"textures": [originalTexturePath, `${controlTexturePath.slice(0, -4)}_${safeSize}`],
-						"additive": true // texture compositing means resource packs that change the item textures will still work
+						"additive": true 
 					};
 				}
 			}));
@@ -806,10 +857,10 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	packFiles.push(["animation_controllers/armor_stand.hologram.animation_controllers.json", JSON.stringify(hologramAnimationControllers)]);
 	packFiles.push(["particles/bounding_box_outline.json", JSON.stringify(boundingBoxOutlineParticle)]);
 	uniqueBlocksToValidate.forEach(blockName => {
-		let particleName = `validate_${blockName.replace(":", ".")}`; // file names can't have : in them
+		let particleName = `validate_${blockName.replace(":", ".")}`; 
 		let particle = structuredClone(blockValidationParticle);
-		particle["particle_effect"]["description"]["identifier"] = `holoprint:${particleName}`;
-		particle["particle_effect"]["components"]["minecraft:particle_expire_if_in_blocks"] = [blockName.includes(":")? blockName : `minecraft:${blockName}`]; // add back minecraft: namespace if it's missing
+		particle["particle_effect"]["description"]["identifier"] = `hololab:${particleName}`; 
+		particle["particle_effect"]["components"]["minecraft:particle_expire_if_in_blocks"] = [blockName.includes(":")? blockName : `minecraft:${blockName}`]; 
 		packFiles.push([`particles/${particleName}.json`, JSON.stringify(particle)]);
 	});
 	packFiles.push(["particles/saving_backup.json", JSON.stringify(savingBackupParticle)]);
@@ -858,7 +909,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	if(previewCont) {
 		let showPreview = () => {
 			hologramGeo["minecraft:geometry"].filter(geo => geo["description"]["identifier"].startsWith("geometry.armor_stand.hologram_")).map(geo => {
-				(new PreviewRenderer(previewCont, textureAtlas, geo, hologramAnimations, config.SHOW_PREVIEW_SKYBOX)).catch(e => console.error("Preview renderer error:", e)); // is async but we won't wait for it
+				(new PreviewRenderer(previewCont, textureAtlas, geo, hologramAnimations, config.SHOW_PREVIEW_SKYBOX)).catch(e => console.error("Preview renderer error:", e)); 
 			});
 		};
 		if(totalBlockCount < config.PREVIEW_BLOCK_LIMIT) {
@@ -882,13 +933,13 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		}
 	}
 	
-	return new File([zippedPack], `${packName}.holoprint.mcpack`, {
+	return new File([zippedPack], `${packName}.hololab.mcpack`, { 
 		type: "application/mcpack"
 	});
 }
 /**
- * Retrieves the structure files from a completed HoloPrint resource pack.
- * @param {File} resourcePack HoloPrint resource pack (`*.mcpack)
+ * Retrieves the structure files from a completed HoloLab resource pack.
+ * @param {File} resourcePack HoloLab resource pack (`*.mcpack)
  * @returns {Promise<Array<File>>}
  */
 export async function extractStructureFilesFromPack(resourcePack) {
@@ -905,16 +956,16 @@ export async function extractStructureFilesFromPack(resourcePack) {
 	}
 }
 /**
- * Updates a HoloPrint resource pack by remaking it.
- * @param {File} resourcePack HoloPrint resource pack to update (`*.mcpack`)
+ * Updates a HoloLab resource pack by remaking it.
+ * @param {File} resourcePack HoloLab resource pack to update (`*.mcpack`)
  * @param {HoloPrintConfig} [config]
  * @param {ResourcePackStack} [resourcePackStack]
  * @param {HTMLElement} [previewCont]
  * @returns {Promise<File>}
  */
 export async function updatePack(resourcePack, config, resourcePackStack, previewCont) {
-	let structureFiles = extractStructureFilesFromPack(resourcePack);
-	if(!structureFiles) {
+	let structureFiles = await extractStructureFilesFromPack(resourcePack); 
+	if(!structureFiles || structureFiles.length === 0) { 
 		throw new UserError(`No structure files found inside resource pack ${resourcePack.name}; cannot update pack!`);
 	}
 	return await makePack(structureFiles, config, resourcePackStack, previewCont);
@@ -925,12 +976,12 @@ export async function updatePack(resourcePack, config, resourcePackStack, previe
  * @returns {String}
  */
 export function getDefaultPackName(structureFiles) {
-	let defaultName = structureFiles.map(structureFile => structureFile.name.replace(/(\.holoprint)?\.[^.]+$/, "")).join(", ");
+	let defaultName = structureFiles.map(structureFile => structureFile.name.replace(/(\.hololab)?\.[^.]+$/, "")).join(", "); 
 	if(defaultName.length > 40) {
 		defaultName = `${defaultName.slice(0, 19)}...${defaultName.slice(-19)}`
 	}
 	if(defaultName.trim() == "") {
-		defaultName = "hologram";
+		defaultName = "hologram"; 
 	}
 	return defaultName;
 }
@@ -954,7 +1005,7 @@ export function findLinksInDescription(description) {
  * @param {String|Array<String>} [tags]
  * @returns {ItemCriteria}
  */
-export function createItemCriteria(names, tags = []) { // IDK why I haven't made this a class
+export function createItemCriteria(names, tags = []) { 
 	if(!Array.isArray(names)) {
 		names = [names];
 	}
@@ -970,7 +1021,7 @@ export function createItemCriteria(names, tags = []) { // IDK why I haven't made
  */
 export function addDefaultConfig(config) {
 	return Object.freeze({
-		...{ // defaults
+		...{ 
 			IGNORED_BLOCKS: [],
 			IGNORED_MATERIAL_LIST_BLOCKS: [],
 			SCALE: 0.95,
@@ -978,16 +1029,16 @@ export function addDefaultConfig(config) {
 			MULTIPLE_OPACITIES: true,
 			TINT_COLOR: "#579EFA",
 			TINT_OPACITY: 0.2,
-			MINI_SCALE: 0.125, // size of ghost blocks when in the mini view for layers
-			TEXTURE_OUTLINE_WIDTH: 0.25, // pixels, x ∈ [0, 1], x ∈ 2^ℝ
+			MINI_SCALE: 0.125, 
+			TEXTURE_OUTLINE_WIDTH: 0.25, 
 			TEXTURE_OUTLINE_COLOR: "#00F",
 			TEXTURE_OUTLINE_OPACITY: 0.65,
 			SPAWN_ANIMATION_ENABLED: true,
-			SPAWN_ANIMATION_LENGTH: 0.4, // in seconds
+			SPAWN_ANIMATION_LENGTH: 0.4, 
 			PLAYER_CONTROLS_ENABLED: true,
 			CONTROLS: {},
 			MATERIAL_LIST_ENABLED: true,
-			RETEXTURE_CONTROL_ITEMS: true,
+			RETEXTURE_CONTROL_ITEMS: false, 
 			CONTROL_ITEM_TEXTURE_SCALE: 1,
 			RENAME_CONTROL_ITEMS: true,
 			WRONG_BLOCK_OVERLAY_COLOR: [1, 0, 0, 0.3],
@@ -997,12 +1048,12 @@ export function addDefaultConfig(config) {
 			PACK_ICON_BLOB: undefined,
 			AUTHORS: [],
 			DESCRIPTION: undefined,
-			COMPRESSION_LEVEL: 5, // level 9 was 8 bytes larger than level 5 when I tested... :0
+			COMPRESSION_LEVEL: 5, 
 			PREVIEW_BLOCK_LIMIT: 500,
 			SHOW_PREVIEW_SKYBOX: true
 		},
 		...config,
-		...{ // overrides (applied after)
+		...{ 
 			IGNORED_BLOCKS: IGNORED_BLOCKS.concat(config.IGNORED_BLOCKS ?? []),
 			CONTROLS: {
 				...DEFAULT_PLAYER_CONTROLS,
@@ -1111,7 +1162,7 @@ async function getResponseContents(resPromise, filePath) {
 async function tweakBlockPalette(structure, ignoredBlocks) {
 	let palette = structuredClone(structure["palette"]["default"]["block_palette"]);
 	
-	let blockVersions = new Set(); // version should be constant for all blocks. just wanted to test this
+	let blockVersions = new Set(); 
 	let blockUpdater = new BlockUpdater(true);
 	let updatedBlocks = 0;
 	for(let [i, block] of Object.entries(palette)) {
@@ -1121,14 +1172,14 @@ async function tweakBlockPalette(structure, ignoredBlocks) {
 				updatedBlocks++;
 			}
 		}
-		block["name"] = block["name"].replace(/^minecraft:/, ""); // remove namespace here, right at the start
+		block["name"] = block["name"].replace(/^minecraft:/, ""); 
 		if(ignoredBlocks.includes(block["name"])) {
 			delete palette[i];
 			continue;
 		}
 		delete block["version"];
 		if(!Object.keys(block["states"]).length) {
-			delete block["states"]; // easier viewing
+			delete block["states"]; 
 		}
 	}
 	let blockVersionsStringified = [...blockVersions].map(v => BlockUpdater.parseBlockVersion(v).join("."));
@@ -1138,17 +1189,16 @@ async function tweakBlockPalette(structure, ignoredBlocks) {
 	}
 	console.log("Block versions:", [...blockVersions], blockVersionsStringified);
 	
-	// add block entities into the block palette (on layer 0)
 	let indices = structure["block_indices"].map(layer => structuredClone(layer).map(i => +i));
 	let newIndexCache = new JSONMap();
-	let entitylessBlockEntityIndices = new Set(); // contains all the block palette indices for blocks with block entities. since they don't have block entity data yet, and all block entities well be cloned and added to the end of the palette, we can remove all the entries in here from the palette.
+	let entitylessBlockEntityIndices = new Set(); 
 	let blockPositionData = structure["palette"]["default"]["block_position_data"];
 	for(let i in blockPositionData) {
 		let oldPaletteI = indices[0][i];
-		if(!(oldPaletteI in palette)) { // if the block is ignored, it will be deleted already, so there's no need to touch its block entities
+		if(!(oldPaletteI in palette)) { 
 			continue;
 		}
-		if(!("block_entity_data" in blockPositionData[i])) { // observers have tick_queue_data
+		if(!("block_entity_data" in blockPositionData[i])) { 
 			continue;
 		}
 		
@@ -1160,11 +1210,9 @@ async function tweakBlockPalette(structure, ignoredBlocks) {
 		delete blockEntityData["y"];
 		delete blockEntityData["z"];
 		
-		// clone the old block and add the block entity data
 		let newBlock = structuredClone(palette[oldPaletteI]);
 		newBlock["block_entity_data"] = blockEntityData;
 		
-		// check that we haven't seen this block entity before. since in JS objects are compared by reference we have to stringify it first then check the cache.
 		if(newIndexCache.has(newBlock)) {
 			indices[0][i] = newIndexCache.get(newBlock);
 		} else {
@@ -1172,12 +1220,11 @@ async function tweakBlockPalette(structure, ignoredBlocks) {
 			palette[paletteI] = newBlock;
 			indices[0][i] = paletteI;
 			newIndexCache.set(newBlock, paletteI);
-			entitylessBlockEntityIndices.add(oldPaletteI); // we can schedule to delete the original block palette entry later, as it doesn't have any block entity data and all block entities clone it.
+			entitylessBlockEntityIndices.add(oldPaletteI); 
 		}
 	}
 	for(let paletteI of entitylessBlockEntityIndices) {
-		// console.log(`deleting entityless block entity ${paletteI} = ${JSON.stringify(blockPalette[paletteI])}`);
-		delete palette[paletteI]; // this makes the blockPalette array discontinuous; when using native array methods, they skip over the empty slots.
+		delete palette[paletteI]; 
 	}
 	
 	return { palette, indices };
@@ -1263,7 +1310,7 @@ function addBlockValidationParticles(hologramAnimationControllers, structureI, b
 		"particle_effects": [],
 		"transitions": [
 			{
-				"default": "!v.hologram.validating" // when changing structure it will always stop validating, so there's no need to check v.hologram.structure_index
+				"default": "!v.hologram.validating" 
 			}
 		]
 	};
@@ -1288,12 +1335,12 @@ function addBlockValidationParticles(hologramAnimationControllers, structureI, b
 					validateAllStateTransition
 				]
 			};
-			layersWithBlocksToValidate.forEach(layerY => { // add transitions from this layer state to others
+			layersWithBlocksToValidate.forEach(layerY => { 
 				layerAnimationState["transitions"].push({
 					[`validate_${structureI}_l_${layerY}`]: `v.hologram.validating && v.hologram.structure_index == ${structureI} && v.hologram.layer == ${layerY}`
 				});
 			});
-			Object.values(validationStates).forEach(state => { // add transitions from other layer states (+ default/all layers) to this layer
+			Object.values(validationStates).forEach(state => { 
 				state["transitions"].push({
 					[animationStateName]: `v.hologram.validating && v.hologram.structure_index == ${structureI} && v.hologram.layer == ${y}`
 				});
@@ -1302,18 +1349,18 @@ function addBlockValidationParticles(hologramAnimationControllers, structureI, b
 			layersWithBlocksToValidate.push(y);
 		}
 		let particleEffect = {
-			"effect": `validate_${blockToValidate["block"].replace(":", ".")}`,
+			"effect": `hololab:validate_${blockToValidate["block"].replace(":", ".")}`, 
 			"locator": blockToValidate["locator"],
 			"pre_effect_script": `
 				v.x = ${x};
 				v.y = ${y};
 				v.z = ${z};
-			`.replaceAll(/\s/g, "") // this is only used for setting the wrong block overlay position; the particle's position is set using the locator
+			`.replaceAll(/\s/g, "") 
 		};
 		validateAllState["particle_effects"].push(particleEffect);
 		validationStates[animationStateName]["particle_effects"].push(particleEffect);
 	});
-	for(let y = 0; y < structureSize[1]; y++) { // layers with no blocks to validate don't have an animation controller state, so transitions to the default state need to be added for when it's on these empty layers
+	for(let y = 0; y < structureSize[1]; y++) { 
 		if(!layersWithBlocksToValidate.includes(y)) {
 			Object.entries(validationStates).forEach(([validationStateName, validationState]) => {
 				if(validationStateName.startsWith(`validate_${structureI}`)) {
@@ -1394,7 +1441,6 @@ function patchRenderControllers(renderControllers, patches) {
  * @returns {Promise<{ inGameControls: Record<String, String>, controlItemTranslations: Record<String, String> }>}
  */
 async function translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, resourceLangFiles, itemTags) {
-	// make a fake material list for the in-game control items (just to translate them lol)
 	let controlsMaterialList = await new MaterialList(blockMetadata, itemMetadata);
 	let inGameControls = {};
 	let controlItemTranslations = {};
@@ -1421,32 +1467,31 @@ async function translateControlItems(config, blockMetadata, itemMetadata, langua
 			controlsMaterialList.export().forEach(({ translationKey, translatedName }) => {
 				controlItemTranslationKeys[control].add(translationKey);
 				translatedControlItems[translationKey] = translatedName;
-			}); // these items will be renamed, and includes all the items in the tags specified. e.g. if "planks" is added as a tag for a control, then all plank types need to be renamed.
+			}); 
 		});
 		controlItemTranslations[language] = "";
 		Object.entries(controlItemTranslationKeys).forEach(([control, itemTranslationKeys]) => {
 			itemTranslationKeys.forEach(itemTranslationKey => {
-				controlItemTranslations[language] += `\n${itemTranslationKey}=${translatedControlItems[itemTranslationKey]}\\n§u${translatedControlNames[control]}§r`; // don't question, it works
+				controlItemTranslations[language] += `\n${itemTranslationKey}=${translatedControlItems[itemTranslationKey]}\\n§u${translatedControlNames[control]}§r`; 
 			});
 		});
 	});
 	return { inGameControls, controlItemTranslations };
 }
 /**
- * Makes a blob for pack_icon.png based on a structure file's SHA256 hash
+ * Makes a blob for pack_icon.png based on a structure file's SHA256 hash (fallback)
  * @param {File} structureFile
  * @returns {Promise<Blob>}
  */
-async function makePackIcon(structureFile) {
-	let fileHashBytes = [...await sha256(structureFile)]; // I feel like I should wrap the async expression in brackets...
+async function makePackIconFallback(structureFile) {
+	let fileHashBytes = [...await sha256(structureFile)]; 
 	let fileHashBits = fileHashBytes.map(byte => [7, 6, 5, 4, 3, 2, 1, 0].map(bitI => byte >> bitI & 0x1)).flat();
 	
-	const ICON_RESOLUTION = [4, 6][fileHashBytes[1] % 2]; // either 4x4 or 6x6 large tiles
+	const ICON_RESOLUTION = [4, 6][fileHashBytes[1] % 2]; 
 	const ICON_TILE_SIZE = 200 / ICON_RESOLUTION;
-	const MORE_TILE_TYPES = false; // adds circles and crosses
+	const MORE_TILE_TYPES = false; 
 	
 	let can = new OffscreenCanvas(256, 256);
-	// let can = document.createElement("canvas"); can.width = can.height = 256; document.body.appendChild(can);
 	let ctx = can.getContext("2d");
 	
 	ctx.lineWidth = 8;
@@ -1465,10 +1510,9 @@ async function makePackIcon(structureFile) {
 		ctx.stroke();
 	};
 	
-	// Truchet pattern
 	for(let x = 0; x < ICON_RESOLUTION; x++) {
 		for(let y = 0; y < ICON_RESOLUTION; y++) {
-			let i = min(x, ICON_RESOLUTION - 1 - x) * ICON_RESOLUTION + y; // x is reflected
+			let i = min(x, ICON_RESOLUTION - 1 - x) * ICON_RESOLUTION + y; 
 			i *= 4;
 			let bit = fileHashBits[i];
 			if(MORE_TILE_TYPES) {
@@ -1496,11 +1540,11 @@ async function makePackIcon(structureFile) {
 	let grad = ctx.createRadialGradient(can.width / 2, can.height / 2, 0, can.width / 2, can.height / 2, ICON_RESOLUTION * ICON_TILE_SIZE / 2 * Math.SQRT2);
 	grad.addColorStop(0, `hsl(${hue}deg, 70%, 50%)`);
 	grad.addColorStop(1, `hsl(${hue + 20}deg, 60%, 60%)`);
-	ctx.globalCompositeOperation = "source-in"; // draw only where the truchet is
+	ctx.globalCompositeOperation = "source-in"; 
 	ctx.fillStyle = grad;
 	ctx.fillRect(0, 0, can.width, can.height);
 	
-	ctx.globalCompositeOperation = "destination-over"; // draw the background underneath
+	ctx.globalCompositeOperation = "destination-over"; 
 	ctx.fillStyle = `hsl(${hue}deg, 40%, 85%)`;
 	ctx.fillRect(0, 0, can.width, can.height);
 	
@@ -1513,7 +1557,7 @@ async function makePackIcon(structureFile) {
  * @returns {Array<String>}
  */
 function expandItemCriteria(itemCriteria, itemTags) {
-	let minecraftTags = itemCriteria["tags"].filter(tag => !tag.includes(":")); // we can't find which items are used in custom tags
+	let minecraftTags = itemCriteria["tags"].filter(tag => !tag.includes(":")); 
 	let namespacedItemsFromTags = minecraftTags.map(tag => itemTags[`minecraft:${tag}`]).flat().removeFalsies();
 	return [...itemCriteria["names"], ...namespacedItemsFromTags.map(itemName => itemName.replace(/^minecraft:/, ""))];
 }
@@ -1536,12 +1580,12 @@ function itemCriteriaToMolang(itemCriteria, slot = "slot.weapon.mainhand") {
  * @returns {String}
  */
 export function arrayToMolang(array, indexVar) {
-	let arrayEntries = Object.entries(array); // to handle splitting, original indices need to be preserved, hence looking at index-value pairs
+	let arrayEntries = Object.entries(array); 
 	return arrayEntriesToMolang(arrayEntries, indexVar);
 }
 function arrayEntriesToMolang(entries, indexVar) {
 	const splittingThreshold = 50;
-	if(entries.length > splittingThreshold) { // large arrays cause Molang stack overflows, so this splits them in half in such a situation.
+	if(entries.length > splittingThreshold) { 
 		let middle = floor(entries.length / 2);
 		return `${indexVar}<${entries[middle][0]}?(${arrayEntriesToMolang(entries.slice(0, middle), indexVar)}):(${arrayEntriesToMolang(entries.slice(middle), indexVar)})`;
 	}
@@ -1566,7 +1610,6 @@ function array2DToMolang(array, indexVar1, indexVar2) {
 function functionToMolang(func, vars = {}) {
 	let funcCode = func.toString();
 	let minifiedFuncBody = funcCode.slice(funcCode.indexOf("{") + 1, funcCode.lastIndexOf("}")).replaceAll(/\/\/.+/g, "").replaceAll(/(?<!return)\s/g, "");
-	// else if() {...} statements must be expanded to be else { if() {...} }
 	let expandedElseIfCode = "";
 	for(let i = 0; i < minifiedFuncBody.length; i++) {
 		if(minifiedFuncBody.slice(i, i + 7) == "elseif(") {
@@ -1583,7 +1626,7 @@ function functionToMolang(func, vars = {}) {
 					braceCounter--;
 				}
 				if(braceCounter == 0 && inIfBlock && minifiedFuncBody.slice(j, j + 5) == "}else") {
-					inIfBlock = false; // keep the final else clause included
+					inIfBlock = false; 
 				}
 			}
 			minifiedFuncBody = minifiedFuncBody.slice(0, j) + "}" + minifiedFuncBody.slice(j);
@@ -1593,7 +1636,6 @@ function functionToMolang(func, vars = {}) {
 	}
 	let mathedCode = expandedElseIfCode.replaceAll(`"`, `'`).replaceAll(/([\w\.]+)(\+|-){2};/g, "$1=$1$21;").replaceAll(/([\w\.]+)--;/g, "$1=$1-1;").replaceAll(/([\w\.\$\[\]]+)(\+|-|\*|\/|\?\?)=([^;]+);/g, "$1=$1$2$3;");
 	
-	// Yay more fun regular expressions, this time to work with variable substitution ($[...])
 	let substituteInVariables = (code, vars) => code.replaceAll(/\$\[(\w+)(?:\[(\d+)\]|\.(\w+))?(?:(\+|-|\*|\/)(\d+))?\]/g, (match, varName, index, key, operator, operand) => {
 		if(varName in vars) {
 			let value = vars[varName];
@@ -1606,7 +1648,7 @@ function functionToMolang(func, vars = {}) {
 				}
 			}
 			switch(operator) {
-				case "+": return +value + +operand; // must cast operands to numbers to avoid string concatenation
+				case "+": return +value + +operand; 
 				case "-": return value - operand;
 				case "*": return value * operand;
 				case "/": return value / operand;
@@ -1616,24 +1658,23 @@ function functionToMolang(func, vars = {}) {
 			throw new ReferenceError(`Variable "${varName}" was not passed to function -> Molang converter!`);
 		}
 	});
-	// I have no idea how to make this smaller. I really wish JS had a native AST conversion API
 	let conditionedCode = "";
 	let parenthesisCounter = 0;
 	let inIfCondition = false;
-	let needsExtraBracketAtEndOfIfCondition = false; // short variable names are for slow typers :)
+	let needsExtraBracketAtEndOfIfCondition = false; 
 	for(let i = 0; i < mathedCode.length; i++) {
 		let char = mathedCode[i];
 		if(mathedCode.slice(i, i + 3) == "if(") {
 			inIfCondition = true;
 			parenthesisCounter++;
-			needsExtraBracketAtEndOfIfCondition = /^if\([^()]+\?\?/.test(mathedCode.slice(i)); // null coalescing operator is the only operator with lower precedence than the ternary conditional operator, so if a conditional expression in if() has ?? without any brackets around it, brackets are needed around the entire conditional expression
+			needsExtraBracketAtEndOfIfCondition = /^if\([^()]+\?\?/.test(mathedCode.slice(i)); 
 			if(needsExtraBracketAtEndOfIfCondition) {
 				conditionedCode += "(";
 			}
 			i += 2;
 			continue;
 		} else if(mathedCode.slice(i, i + 4) == "else") {
-			conditionedCode = conditionedCode.slice(0, -1) + ":"; // replace the ; with :
+			conditionedCode = conditionedCode.slice(0, -1) + ":"; 
 			i += 3;
 			continue;
 		} else if(/^for\([^)]+\)/.test(mathedCode.slice(i))) {
@@ -1693,11 +1734,7 @@ function stringifyWithFixedDecimals(value) {
 	const NUMBER_OF_DECIMALS = 4;
 	return JSON.stringify(value, (key, x) => {
 		if(typeof x == "number") {
-			// let oldNumber = x;
 			x = Number(x.toFixed(NUMBER_OF_DECIMALS));
-			// if(abs(x - oldNumber) > 10 ** (-NUMBER_OF_DECIMALS - 1)) {
-			// 	console.debug(`Turned long number ${oldNumber} into ${x} when stringifying JSON`);
-			// }
 		}
 		return x;
 	});
