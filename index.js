@@ -1,30 +1,24 @@
-import { extractStructureFilesFromMcworld } from "mcbe-leveldb-reader";
-import { selectEl, selectEls, loadTranslationLanguage, translate, getStackTrace, random, UserError, joinOr, conditionallyGroup, groupByFileExtension, addFilesToFileInput, setFileInputFiles, dispatchInputEvents, removeFileExtension } from "./essential.js";
-import * as HoloPrint from "./HoloPrint.js";
+import { selectEl, selectEls, loadTranslationLanguage, translate, dispatchInputEvents, removeFileExtension, UserError, getStackTrace, downloadBlob } from "./essential.js";
+import * as HoloPrint from "./HoloPrint.js"; // Funcionalidade principal de geração do pacote
 
-import ResourcePackStack from "./ResourcePackStack.js";
-import LocalResourcePack from "./LocalResourcePack.js";
-import TextureAtlas from "./TextureAtlas.js";
-// ItemCriteriaInput não está sendo usado diretamente na nova UI principal, mas é usado por HoloPrint.js internamente
-// import ItemCriteriaInput from "./components/ItemCriteriaInput.js";
-import FileInputTable from "./components/FileInputTable.js";
-import SimpleLogger from "./components/SimpleLogger.js";
+// Importar componentes Web se eles forem usados diretamente no HTML e não apenas pelo HoloPrint.js
+import "./components/FileInputTable.js"; // Garante que o custom element seja definido
+import "./components/SimpleLogger.js";   // Garante que o custom element seja definido
 
 const IN_PRODUCTION = false;
-const ACTUAL_CONSOLE_LOG = false;
+const ACTUAL_CONSOLE_LOG = false; // Defina como true para logs diretos no console do navegador
+const HOLOLAB_APP_VERSION = "1.0.0-HoloLab"; // Pode ser dinâmico no futuro
 
-const HOLOLAB_APP_VERSION = "1.0.0-HoloLab";
-
+// Variáveis globais para elementos da UI
 let dropFileNotice;
 let generatePackForm;
 let generatePackFormSubmitButton;
-let structureFilesInput;
-let structureFilesTable; // Este é o elemento <file-input-table>
-
+let structureFilesInput; // O <input type="file"> real
+let structureFilesTable; // O componente <file-input-table>
 let packNameInput;
 let completedPacksCont;
-let logger;
-let errorLogContainer;
+let errorLogContainer; // Onde o SimpleLogger será inserido
+let logger; // Instância do SimpleLogger
 
 let languageSelector;
 let defaultResourcePackStackPromise;
@@ -38,13 +32,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // Inicialização de elementos da UI
     dropFileNotice = selectEl("#dropFileNotice");
     generatePackForm = selectEl("#generatePackForm");
-    generatePackFormSubmitButton = selectEl("#generatePackButton"); // Corrigido ID
+    generatePackFormSubmitButton = selectEl("#generatePackButton");
     structureFilesInput = selectEl("#structureFilesInput");
     dropZoneStructure = selectEl("#dropZoneStructure");
-    structureFilesTable = selectEl("#structureFilesTable"); 
+    structureFilesTable = selectEl("#structureFilesTable");
     texturePreviewImageCont = selectEl("#texturePreviewImageCont");
     texturePreviewName = selectEl("#texturePreviewName");
-    if (texturePreviewImageCont) { // Garante que texturePreviewImageCont existe antes de buscar o loader
+    if (texturePreviewImageCont) {
         texturePreviewLoader = texturePreviewImageCont.querySelector(".loader");
     }
     
@@ -52,80 +46,77 @@ document.addEventListener("DOMContentLoaded", () => {
     completedPacksCont = selectEl("#completedPacksCont");
     errorLogContainer = selectEl("#errorLogContainer");
 
-    if(!ACTUAL_CONSOLE_LOG) {
-        logger = document.createElement("simple-logger");
+    // Configurar o logger
+    if (!ACTUAL_CONSOLE_LOG) {
         if (errorLogContainer) {
-            errorLogContainer.innerHTML = ''; 
+            logger = document.createElement("simple-logger");
+            errorLogContainer.innerHTML = ''; // Limpar texto placeholder
             errorLogContainer.appendChild(logger);
+            logger.patchConsoleMethods();
         } else {
-            document.body.appendChild(logger);
+            console.warn("#errorLogContainer not found for SimpleLogger.");
         }
-		logger.patchConsoleMethods();
-	}
-    
+    } else { // Se ACTUAL_CONSOLE_LOG for true, use o console padrão
+        window.logger = console; // Para compatibilidade com chamadas logger?.
+    }
+
+    // Associar o input de arquivo ao componente file-input-table
     if (structureFilesTable && structureFilesInput) {
-        structureFilesTable.fileInput = structureFilesInput; // Associa o input ao componente
-         // O componente FileInputTable deve lidar com a atualização de sua própria exibição
-        structureFilesInput.addEventListener("input", () => {
-            // Disparar um evento customizado ou chamar um método se FileInputTable não o fizer automaticamente
-            structureFilesTable.dispatchEvent(new CustomEvent('filesupdated'));
-        });
+        structureFilesTable.fileInput = structureFilesInput; // Importante para o componente funcionar
+        // O componente FileInputTable já deve ter um listener interno para o 'input' do seu fileInput
     } else {
-        console.warn("Structure files input or table not found for initialization.");
+        console.warn("HTMLInputElement for structures or FileInputTable component not found.");
     }
 
 	packNameInput?.addEventListener("invalid", () => {
-		packNameInput.setCustomValidity(translateCurrentLanguage("metadata.pack_name.error") || "Pack name cannot contain '/'");
+		if (packNameInput) packNameInput.setCustomValidity(translateCurrentLanguage("metadata.pack_name.error") || "Pack name cannot contain '/'");
 	});
 	packNameInput?.addEventListener("input", () => {
-		packNameInput.setCustomValidity("");
+		if (packNameInput) packNameInput.setCustomValidity("");
 	});
 
     setupStructureFileHandling();
 
 	structureFilesInput.addEventListener("input", () => {
         updatePackNameInputPlaceholder();
-        updateTexturePreview();
-        // Certifique-se que FileInputTable atualize sua exibição
-        if (structureFilesTable) {
-            structureFilesTable.dispatchEvent(new CustomEvent('filesupdated'));
-        }
+        updateTexturePreview(); // Atualizar preview ao selecionar/remover arquivos
+        // O FileInputTable deve se atualizar automaticamente se o fileInput associado mudar
     });
+    
+    // Chamadas iniciais
     updatePackNameInputPlaceholder(); 
-    updateTexturePreview(); // Chamar para estado inicial (sem arquivos)
+    updateTexturePreview(); 
 
-	defaultResourcePackStackPromise = new ResourcePackStack();
+	defaultResourcePackStackPromise = new ResourcePackStack(); // Inicializa o stack padrão
 	
 	if(location.search == "?loadFile") { 
 		window.launchQueue?.setConsumer(async launchParams => {
-			let launchFiles = await Promise.all(launchParams.files.map(fileHandle => fileHandle.getFile()));
-			handleDroppedFiles(launchFiles); 
+			if (launchParams.files && launchParams.files.length > 0) {
+                const files = await Promise.all(launchParams.files.map(fileHandle => fileHandle.getFile()));
+                handleDroppedFiles(files);
+            }
 		});
 	}
 	
 	generatePackForm.addEventListener("submit", async (e) => {
 		e.preventDefault();
-		const filesToProcess = Array.from(structureFilesInput.files); // Pega os arquivos do input
+		const filesToProcess = Array.from(structureFilesInput.files);
         if (filesToProcess.length === 0) {
             alert(translateCurrentLanguage("upload.error.no_file_selected") || "Please select a .mcstructure file.");
             return;
         }
-		makePackAndHandleUI(filesToProcess, []); // Passa os arquivos do input
-	});
-	
-	generatePackForm.addEventListener("input", e => {
-        // Exemplo: Atualizar preview dinâmico se opções de textura forem re-adicionadas
-		// if(e.target.closest("#hologram-options-section") && e.target.hasAttribute("name")) {
-		// 	// updateDynamicTexturePreviewBasedOnOptions(); 
-		// }
+		makePackAndHandleUI(filesToProcess, []);
 	});
 	
     languageSelector = selectEl("#languageSelector");
-	setupLanguageSelector(); // Configurar o seletor de idiomas
+	setupLanguageSelector();
 });
 
 function setupStructureFileHandling() {
-    if (!dropZoneStructure || !structureFilesInput) return;
+    if (!dropZoneStructure || !structureFilesInput) {
+        console.warn("Drop zone or structure file input not found for setup.");
+        return;
+    }
 
     dropZoneStructure.addEventListener("click", () => structureFilesInput.click());
 
@@ -142,40 +133,41 @@ function setupStructureFileHandling() {
         e.preventDefault();
         dropZoneStructure.classList.remove("dragover");
         showDropNotice(false);
-        if (e.dataTransfer.files.length) {
+        if (e.dataTransfer && e.dataTransfer.files.length) {
             const mcstructureFiles = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith(".mcstructure"));
             if (mcstructureFiles.length > 0) {
                 const dt = new DataTransfer();
                 mcstructureFiles.forEach(f => dt.items.add(f));
                 structureFilesInput.files = dt.files;
-                dispatchInputEvents(structureFilesInput);
+                dispatchInputEvents(structureFilesInput); // ESSENCIAL para notificar outros listeners (como FileInputTable)
             } else {
                 alert(translateCurrentLanguage("upload.error.mcstructure_only") || "Please drop .mcstructure files only.");
             }
         }
     });
 
+    // Eventos globais para mostrar/esconder o aviso de drop
     let dragCounter = 0;
 	document.documentElement.addEventListener("dragenter", (e) => {
-        if (e.dataTransfer.types.includes("Files")) {
+        if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
             dragCounter++;
             showDropNotice(true);
         }
     });
 	document.documentElement.addEventListener("dragleave", (e) => {
-        const rect = document.documentElement.getBoundingClientRect();
         // Verifica se o mouse realmente saiu da janela do navegador
-        if (e.clientX <= rect.left || e.clientX >= rect.right || e.clientY <= rect.top || e.clientY >= rect.bottom) {
+        if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
             dragCounter--;
-            if (dragCounter === 0) {
+            if (dragCounter <= 0) { // Usar <= 0 para mais robustez
                 showDropNotice(false);
+                dragCounter = 0; // Resetar contador
             }
         }
     });
     document.documentElement.addEventListener("dragover", e => {
-        if (e.dataTransfer.types.includes("Files")) {
-             e.preventDefault();
-             showDropNotice(true);
+        if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
+             e.preventDefault(); 
+             showDropNotice(true); 
         }
     });
     document.documentElement.addEventListener("drop", (e) => { 
@@ -191,39 +183,41 @@ function showDropNotice(show) {
     }
 }
 
-function handleDroppedFiles(files) {
+function handleDroppedFiles(files) { 
     const mcstructureFiles = files.filter(file => file.name.endsWith(".mcstructure"));
     if (mcstructureFiles.length > 0) {
-        // Criar um novo DataTransfer e definir os arquivos no input
         const dt = new DataTransfer();
         mcstructureFiles.forEach(f => dt.items.add(f));
-        structureFilesInput.files = dt.files;
-        dispatchInputEvents(structureFilesInput); // Dispara o evento para atualizar a UI (ex: FileInputTable)
+        structureFilesInput.files = dt.files; // Substitui os arquivos existentes
+        dispatchInputEvents(structureFilesInput);
     } else {
-        console.warn("No .mcstructure files found in dropped items for PWA.");
+        console.warn("No .mcstructure files found in dropped items for PWA/general drop.");
     }
 }
 
-
 function updatePackNameInputPlaceholder() {
-	if (packNameInput && structureFilesInput) { // Adicionada verificação para structureFilesInput
-        packNameInput.placeholder = HoloPrint.getDefaultPackName([...structureFilesInput.files]);
+	if (packNameInput && structureFilesInput) {
+        const files = Array.from(structureFilesInput.files);
+        packNameInput.placeholder = HoloPrint.getDefaultPackName(files);
     }
 }
 
 async function updateTexturePreview() {
     const defaultText = translateCurrentLanguage("preview.no_file_selected") || "No file selected";
-    if (texturePreviewLoader) texturePreviewLoader.classList.add("hidden"); // Esconde o loader por padrão
+    if (texturePreviewLoader) texturePreviewLoader.classList.add("hidden");
 
     if (!texturePreviewImageCont || !texturePreviewName || !structureFilesInput || structureFilesInput.files.length === 0) {
         if(texturePreviewName) texturePreviewName.textContent = defaultText;
         if(texturePreviewImageCont) {
-            // Limpa qualquer imagem/canvas/texto de erro anterior, exceto o loader e o p#texturePreviewName
             Array.from(texturePreviewImageCont.children).forEach(child => {
                 if (child !== texturePreviewLoader && child !== texturePreviewName) {
                     child.remove();
                 }
             });
+             // Garantir que o texto de "No file selected" seja exibido se não houver loader e o nome já estiver lá
+            if (!texturePreviewImageCont.querySelector("p#texturePreviewName") && texturePreviewName) {
+                 texturePreviewImageCont.appendChild(texturePreviewName);
+            }
         }
         return;
     }
@@ -232,15 +226,11 @@ async function updateTexturePreview() {
     texturePreviewName.textContent = removeFileExtension(file.name);
     if(texturePreviewLoader) texturePreviewLoader.classList.remove("hidden");
     
-    // Limpa apenas previews de imagem/canvas anteriores
     texturePreviewImageCont.querySelectorAll("img, canvas, p:not(#texturePreviewName)").forEach(el => el.remove());
 
     try {
-        // A lógica real de geração de preview de textura precisa ser implementada aqui.
-        // Isso envolveria chamar HoloPrint.js ou módulos relacionados.
-        // Por enquanto, apenas um placeholder.
-        console.warn("Texture preview generation logic is a placeholder for: " + file.name);
-        await sleep(500); // Simula carregamento
+        console.warn("Texture preview generation for '" + file.name + "' is a placeholder.");
+        await sleep(500); 
         if(texturePreviewLoader) texturePreviewLoader.classList.add("hidden");
         const placeholderText = document.createElement("p");
         placeholderText.textContent = `Preview for ${file.name} (Not Implemented Yet)`;
@@ -254,11 +244,10 @@ async function updateTexturePreview() {
     }
 }
 
-
 async function setupLanguageSelector() {
     if (!languageSelector) {
-        console.warn("Language selector not found.");
-        await translatePage("en_US"); // Tenta traduzir para inglês como fallback
+        console.warn("Language selector element not found. Defaulting to English.");
+        await translatePage("en_US");
         return;
     }
 
@@ -269,24 +258,17 @@ async function setupLanguageSelector() {
         
         const sortedLanguages = Object.entries(languagesAndNames).sort((a, b) => a[1].localeCompare(b[1]));
         
-        if (sortedLanguages.length === 0) { // Caso languages.json esteja vazio
-            console.warn("No languages found in languages.json");
+        if (sortedLanguages.length === 0) {
+            console.warn("No languages found in languages.json. Defaulting to English.");
             await translatePage("en_US");
-            languageSelector.parentElement.classList.add("hidden");
+            if (languageSelector.parentElement) languageSelector.parentElement.classList.add("hidden");
             return;
         }
         
-        if (sortedLanguages.length <= 1 && languageSelector.parentElement) {
-            languageSelector.parentElement.classList.add("hidden"); 
-            await translatePage(sortedLanguages[0]?.[0] || "en_US");
-            return;
-        }
-
-        let browserLang = navigator.language || navigator.userLanguage || "en_US"; 
-        let defaultLanguage = sortedLanguages.find(([code]) => code.replace("_", "-").toLowerCase() === browserLang.toLowerCase())?.[0] ||
-                              sortedLanguages.find(([code]) => code.split(/[-_]/)[0].toLowerCase() === browserLang.split(/[-_]/)[0].toLowerCase())?.[0] ||
-                              sortedLanguages[0][0] || // Fallback para o primeiro idioma da lista
-                              "en_US";
+        let browserLang = (navigator.language || navigator.userLanguage || "en_US").replace("-", "_");
+        let defaultLanguage = sortedLanguages.find(([code]) => code.toLowerCase() === browserLang.toLowerCase())?.[0] ||
+                              sortedLanguages.find(([code]) => code.split("_")[0].toLowerCase() === browserLang.split("_")[0].toLowerCase())?.[0] ||
+                              sortedLanguages[0][0]; // Fallback para o primeiro da lista
 
         languageSelector.innerHTML = ''; 
         sortedLanguages.forEach(([code, name]) => {
@@ -303,7 +285,7 @@ async function setupLanguageSelector() {
 
     } catch (error) {
         console.error("Error setting up language selector:", error);
-        await translatePage("en_US");
+        await translatePage("en_US"); // Fallback final
         if (languageSelector.parentElement) languageSelector.parentElement.classList.add("hidden");
     }
 }
@@ -313,15 +295,21 @@ async function translatePage(languageCode) {
         await loadTranslationLanguage(languageCode); 
     } catch (e) {
         console.error(`Failed to load translation file for ${languageCode}:`, e);
-        if (languageCode !== "en_US") { // Tenta fallback para inglês se não for inglês
-            console.warn("Falling back to English (en_US) translation.");
-            await loadTranslationLanguage("en_US");
-            languageCode = "en_US"; // Atualiza para refletir o fallback
+        if (languageCode !== "en_US") {
+            console.warn("Falling back to English (en_US) translation for UI.");
+            try {
+                await loadTranslationLanguage("en_US");
+                languageCode = "en_US"; 
+            } catch (e2) {
+                console.error("Failed to load English fallback translation:", e2);
+                return; // Não há mais o que fazer
+            }
         } else {
-            return; // Se nem o inglês carregar, não há o que fazer.
+            return; 
         }
     }
 
+    document.documentElement.lang = languageCode.split(/[-_]/)[0];
 
     const elements = document.querySelectorAll("[data-translate]");
     elements.forEach(element => {
@@ -329,53 +317,67 @@ async function translatePage(languageCode) {
         let translation = translate(key, languageCode); 
         
         if (translation === undefined && languageCode !== "en_US") {
-            translation = translate(key, "en_US"); // Fallback para inglês se a tradução específica não existir
+            translation = translate(key, "en_US");
         }
 
         if (translation !== undefined) {
             let finalTranslation = translation;
             const authorSub = element.dataset.translationSubAuthor;
-            // Usar HOLOLAB_APP_VERSION para o placeholder {VERSION}
             const versionSub = element.dataset.translationSubVersion || HOLOLAB_APP_VERSION;
+            const countSub = element.dataset.translationSubCount;
 
 
-            if (authorSub) {
-                finalTranslation = finalTranslation.replace(/{AUTHOR}/g, authorSub);
-            }
-            if (versionSub) {
-                finalTranslation = finalTranslation.replace(/{VERSION}/g, versionSub);
+            if (authorSub) finalTranslation = finalTranslation.replace(/{AUTHOR}/g, authorSub);
+            if (versionSub) finalTranslation = finalTranslation.replace(/{VERSION}/g, versionSub);
+            if (countSub) {
+                finalTranslation = finalTranslation.replace(/{COUNT}/g, countSub);
+                if (parseInt(countSub) > 1) {
+                    finalTranslation = finalTranslation.replace(/\[s\]/g, 's').replace(/\[es\]/g, 'es'); // Plural simples
+                } else {
+                    finalTranslation = finalTranslation.replace(/\[s\]/g, '').replace(/\[es\]/g, '');
+                }
+                finalTranslation = finalTranslation.replace(/\[|\]/g, ''); // Remove colchetes restantes
             }
             
-            if (element.hasAttribute('data-translate-placeholder')) {
-                 element.placeholder = finalTranslation;
-            } else if (element.hasAttribute('data-translate-title')) {
-                 element.title = finalTranslation;
+            const targetAttr = Object.keys(element.dataset).find(k => k.startsWith("translate") && k !== "translate" && k !== "translationSubAuthor" && k !== "translationSubVersion" && k !== "translationSubCount" );
+
+            if (targetAttr) {
+                const attributeName = targetAttr.substring('translate'.length).toLowerCase();
+                if (attributeName === 'placeholder' || attributeName === 'title' || attributeName === 'value' || attributeName === 'alt') {
+                    element[attributeName] = finalTranslation;
+                } else {
+                     element.setAttribute(attributeName, finalTranslation);
+                }
             } else {
                 element.innerHTML = finalTranslation; 
             }
         } else {
-            console.warn(`Missing translation for key "${key}" (lang: ${languageCode}).`);
+            // Não exibir aviso para chaves que podem ser de atributos e não ter tradução direta no innerHTML
+            // console.warn(`Missing translation for key "${key}" (lang: ${languageCode}).`);
         }
     });
-    document.documentElement.lang = languageCode.split(/[-_]/)[0]; // Usa regex para split
 }
+
 
 function translateCurrentLanguage(translationKey) {
 	if(!languageSelector) {
-		return translationKey; // Retorna a chave se o seletor não existir
+		// Se o seletor de idioma não estiver pronto, tenta carregar inglês como fallback
+		const fallbackTranslation = translate(translationKey, "en_US");
+        return fallbackTranslation === undefined ? translationKey : fallbackTranslation;
 	}
 	let currentLang = languageSelector.value;
 	let translation = translate(translationKey, currentLang);
+
 	if(translation === undefined && currentLang !== "en_US") {
 		translation = translate(translationKey, "en_US"); 
 		if(translation !== undefined) {
-			console.warn(`Translation for "${translationKey}" not found in "${currentLang}". Using English fallback.`);
+			// console.warn(`Translation for "${translationKey}" not found in "${currentLang}". Using English fallback.`);
 		} else {
-			console.warn(`Translation for "${translationKey}" not found in "${currentLang}" or English.`);
-			return translationKey; // Retorna a chave se nenhuma tradução for encontrada
+			// console.warn(`Translation for "${translationKey}" not found in "${currentLang}" or English.`);
+			return translationKey; 
 		}
 	} else if (translation === undefined) {
-        console.warn(`Translation for "${translationKey}" not found in English.`);
+        // console.warn(`Translation for "${translationKey}" not found in English.`);
         return translationKey;
     }
 	return translation;
@@ -388,21 +390,28 @@ function translateCurrentLanguage(translationKey) {
  * @returns {Promise<void>}
  */
 async function makePackAndHandleUI(files, localResourcePacks) {
-	if (!generatePackFormSubmitButton || !completedPacksCont) return;
+	if (!generatePackFormSubmitButton || !completedPacksCont) {
+        console.error("UI elements for pack generation not found.");
+        return;
+    }
     generatePackFormSubmitButton.disabled = true;
 	
 	let formData = new FormData(generatePackForm);
-	let authors = formData.get("author")?.split(",").map(x => x.trim()).filter(Boolean) ?? [];
+    let authors = [];
+    const authorField = formData.get("author");
+    if (typeof authorField === 'string') {
+        authors = authorField.split(",").map(x => x.trim()).filter(Boolean);
+    }
 	
 	/** @type {import("./HoloPrint.js").HoloPrintConfig} */
 	let config = {
-		IGNORED_BLOCKS: formData.get("ignoredBlocks")?.split(/\W/).filter(Boolean) ?? HoloPrint.IGNORED_BLOCKS,
-		SCALE: formData.get("scale") ? parseFloat(formData.get("scale")) / 100 : 0.95,
+		IGNORED_BLOCKS: formData.get("ignoredBlocks")?.toString().split(/\W/).filter(Boolean) ?? HoloPrint.IGNORED_BLOCKS,
+		SCALE: formData.get("scale") ? parseFloat(formData.get("scale").toString()) / 100 : 0.95,
 		TINT_COLOR: formData.get("tintColor")?.toString() || "#579EFA",
-		TINT_OPACITY: formData.get("tintOpacity") ? parseFloat(formData.get("tintOpacity")) / 100 : 0.2,
-        TEXTURE_OUTLINE_WIDTH: formData.get("textureOutlineWidth") ? parseFloat(formData.get("textureOutlineWidth")) : 0.25,
+		TINT_OPACITY: formData.get("tintOpacity") ? parseFloat(formData.get("tintOpacity").toString()) / 100 : 0.2,
+        TEXTURE_OUTLINE_WIDTH: formData.get("textureOutlineWidth") ? parseFloat(formData.get("textureOutlineWidth").toString()) : 0.25,
         TEXTURE_OUTLINE_COLOR: formData.get("textureOutlineColor")?.toString() || "#0000FF",
-        TEXTURE_OUTLINE_OPACITY: formData.get("textureOutlineOpacity") ? parseFloat(formData.get("textureOutlineOpacity")) / 100 : 0.65,
+        TEXTURE_OUTLINE_OPACITY: formData.get("textureOutlineOpacity") ? parseFloat(formData.get("textureOutlineOpacity").toString()) / 100 : 0.65,
 		SPAWN_ANIMATION_ENABLED: !!formData.get("spawnAnimationEnabled"),
 		PLAYER_CONTROLS_ENABLED: !!formData.get("playerControlsEnabled"),
 		MATERIAL_LIST_ENABLED: !!formData.get("materialListEnabled"),
@@ -423,7 +432,7 @@ async function makePackAndHandleUI(files, localResourcePacks) {
 		PACK_NAME: formData.get("packName")?.toString() || undefined,
 		PACK_ICON_BLOB: undefined, 
 		AUTHORS: authors,
-		DESCRIPTION: formData.get("description")?.toString() || undefined, 
+		DESCRIPTION: undefined, // Descrição do formulário não é mais usada aqui
 		COMPRESSION_LEVEL: 5, 
         PREVIEW_BLOCK_LIMIT: 0, 
         SHOW_PREVIEW_SKYBOX: false, 
@@ -440,7 +449,7 @@ async function makePackAndHandleUI(files, localResourcePacks) {
     await translatePage(languageSelector.value); 
 	
 	let resourcePackStack = await defaultResourcePackStackPromise;
-    if (localResourcePacks && localResourcePacks.length > 0) {
+    if (localResourcePacks && localResourcePacks.length > 0) { // Não usado na UI atual, mas mantido
         resourcePackStack = await new ResourcePackStack(localResourcePacks);
     }
 	
