@@ -11,7 +11,7 @@ import { addPaddingToImage, arrayMin, awaitAllEntries, CachingFetcher, concatena
 import ResourcePackStack from "./ResourcePackStack.js";
 import BlockUpdater from "./BlockUpdater.js";
 
-export const VERSION = "dev";
+export let VERSION = "dev"; // Será modificado pelo script de build
 export const IGNORED_BLOCKS = ["air", "piston_arm_collision", "sticky_piston_arm_collision"]; // blocks to be ignored when scanning the structure file
 const IGNORED_BLOCK_ENTITIES = ["Beacon", "Beehive", "Bell", "BrewingStand", "ChiseledBookshelf", "CommandBlock", "Comparator", "Conduit", "EnchantTable", "EndGateway", "JigsawBlock", "Lodestone", "SculkCatalyst", "SculkShrieker", "SculkSensor", "CalibratedSculkSensor", "StructureBlock", "BrushableBlock", "TrialSpawner", "Vault"];
 export const PLAYER_CONTROL_NAMES = {
@@ -44,9 +44,10 @@ export const DEFAULT_PLAYER_CONTROLS = {
 };
 
 const HOLOGRAM_LAYER_MODES = createNumericEnum(["SINGLE", "ALL_BELOW"]);
+const DEFAULT_PACK_ICON_URL = "https://github.com/Holo-Lab/holo/blob/main/ChatGPT%20Image%203%20de%20jun.%20de%202025,%2008_40_34.png?raw=true";
 
 /**
- * Makes a HoloPrint resource pack from a structure file.
+ * Makes a HoloLab resource pack from a structure file.
  * @param {File|Array<File>} structureFiles Either a singular structure file (`*.mcstructure`), or an array of structure files
  * @param {HoloPrintConfig} [config]
  * @param {ResourcePackStack} [resourcePackStack]
@@ -54,7 +55,7 @@ const HOLOGRAM_LAYER_MODES = createNumericEnum(["SINGLE", "ALL_BELOW"]);
  * @returns {Promise<File>} Resource pack (`*.mcpack`)
  */
 export async function makePack(structureFiles, config = {}, resourcePackStack, previewCont) {
-	console.info(`Running HoloPrint ${VERSION}`);
+	console.info(`Running HoloLab ${VERSION}`); // Alterado de HoloPrint para HoloLab
 	if(!resourcePackStack) {
 		console.debug("Waiting for resource pack stack initialisation...");
 		resourcePackStack = await new ResourcePackStack();
@@ -73,6 +74,19 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	let packName = config.PACK_NAME ?? getDefaultPackName(structureFiles);
 	
 	// Make the pack
+	let packIconBlob = config.PACK_ICON_BLOB;
+	if (!packIconBlob) {
+		try {
+			const response = await fetch(DEFAULT_PACK_ICON_URL);
+			if (!response.ok) throw new Error(`Failed to fetch default pack icon: ${response.statusText}`);
+			packIconBlob = await response.blob();
+		} catch (e) {
+			console.warn(`Could not load default pack icon from URL. Generating dynamic icon. Error: ${e}`);
+			packIconBlob = await makePackIcon(concatenateFiles(structureFiles)); // Fallback
+		}
+	}
+
+
 	let loadedStuff = await loadStuff({
 		packTemplate: {
 			manifest: "manifest.json",
@@ -99,7 +113,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			resourceItemTexture: config.RETEXTURE_CONTROL_ITEMS? "textures/item_texture.json" : undefined
 		},
 		otherFiles: {
-			packIcon: config.PACK_ICON_BLOB ?? makePackIcon(concatenateFiles(structureFiles)),
+			packIcon: packIconBlob, // Usar o ícone carregado ou gerado
 			itemIcons: config.RETEXTURE_CONTROL_ITEMS? fetch("data/itemIcons.json").then(res => res.jsonc()) : undefined
 		},
 		data: { // these will not be put into the pack
@@ -449,8 +463,8 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		totalBlocksToValidateByStructureByLayer.push(blocksToValidateByLayer);
 	});
 	
-	entityDescription["materials"]["hologram"] = "holoprint_hologram";
-	entityDescription["materials"]["hologram.wrong_block_overlay"] = "holoprint_hologram.wrong_block_overlay";
+	entityDescription["materials"]["hologram"] = "hololab_hologram"; // Alterado de holoprint_hologram
+	entityDescription["materials"]["hologram.wrong_block_overlay"] = "hololab_hologram.wrong_block_overlay"; // Alterado de holoprint_hologram
 	entityDescription["textures"]["hologram.overlay"] = "textures/entity/overlay";
 	entityDescription["textures"]["hologram.save_icon"] = "textures/particle/save_icon";
 	entityDescription["animations"]["hologram.align"] = "animation.armor_stand.hologram.align";
@@ -471,7 +485,8 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		initialOffset: config.INITIAL_OFFSET,
 		defaultTextureIndex,
 		singleLayerMode: HOLOGRAM_LAYER_MODES.SINGLE,
-		structureCount: structureFiles.length
+		structureCount: structureFiles.length,
+		HOLOGRAM_INITIAL_ACTIVATION: true // Defaulting a true para o subpack padrão
 	}));
 	entityDescription["scripts"]["pre_animation"] ??= [];
 	entityDescription["scripts"]["pre_animation"].push(functionToMolang(entityScripts.armorStandPreAnimation, {
@@ -493,7 +508,10 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		disablePlayerControls: itemCriteriaToMolang(config.CONTROLS.DISABLE_PLAYER_CONTROLS),
 		backupHologram: itemCriteriaToMolang(config.CONTROLS.BACKUP_HOLOGRAM),
 		singleLayerMode: HOLOGRAM_LAYER_MODES.SINGLE,
-		ACTIONS: entityScripts.ACTIONS
+		ACTIONS: entityScripts.ACTIONS,
+		// Adicionando placeholders para os novos controles, se necessário, ou eles são passados pela UI
+		moveHologram: itemCriteriaToMolang(config.CONTROLS.MOVE_HOLOGRAM),
+		changeStructure: itemCriteriaToMolang(config.CONTROLS.CHANGE_STRUCTURE)
 	}));
 	entityDescription["geometry"]["hologram.wrong_block_overlay"] = "geometry.armor_stand.hologram.wrong_block_overlay";
 	entityDescription["geometry"]["hologram.valid_structure_overlay"] = "geometry.armor_stand.hologram.valid_structure_overlay";
@@ -507,8 +525,8 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		"controller.render.armor_stand.hologram.valid_structure_overlay": "v.hologram.validating && v.wrong_blocks == 0"
 	}, "controller.render.armor_stand.hologram.particle_alignment");
 	entityDescription["particle_effects"] ??= {};
-	entityDescription["particle_effects"]["bounding_box_outline"] = "holoprint:bounding_box_outline";
-	entityDescription["particle_effects"]["saving_backup"] = "holoprint:saving_backup";
+	entityDescription["particle_effects"]["bounding_box_outline"] = "hololab:bounding_box_outline"; // Alterado de holoprint
+	entityDescription["particle_effects"]["saving_backup"] = "hololab:saving_backup";  // Alterado de holoprint
 	
 	textureBlobs.forEach(([textureName]) => {
 		entityDescription["textures"][textureName] = `textures/entity/${textureName}`;
@@ -530,7 +548,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	// add the particles' short names, and then reference them in the animation controller
 	uniqueBlocksToValidate.forEach(blockName => {
 		let particleName = `validate_${blockName.replace(":", ".")}`;
-		entityDescription["particle_effects"][particleName] = `holoprint:${particleName}`;
+		entityDescription["particle_effects"][particleName] = `hololab:${particleName}`; // Alterado de holoprint
 	});
 	
 	let playerRenderControllers = defaultPlayerRenderControllers && addPlayerControlsToRenderControllers(config, defaultPlayerRenderControllers);
@@ -568,26 +586,42 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	
 	manifest["header"]["name"] = packName;
 	manifest["header"]["uuid"] = crypto.randomUUID();
-	let packVersion = VERSION.match(/^v(\d+)\.(\d+)\.(\d+)$/)?.slice(1)?.map(x => +x) ?? [1, 0, 0];
-	manifest["header"]["version"] = packVersion;
+	let packVersionArray = VERSION.match(/^v(\d+)\.(\d+)\.(\d+)$/)?.slice(1)?.map(x => +x) ?? [1, 0, 0];
+	manifest["header"]["version"] = packVersionArray;
+	manifest["modules"][0].description = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz"; // Modificação da descrição do módulo
 	manifest["modules"][0]["uuid"] = crypto.randomUUID();
-	manifest["modules"][0]["version"] = packVersion;
-	manifest["metadata"]["generated_with"]["holoprint"] = [packVersion.join(".")];
-	if(config.AUTHORS.length) {
-		manifest["metadata"]["authors"].push(...config.AUTHORS);
-	}
-	if(config.DESCRIPTION) {
+	manifest["modules"][0]["version"] = packVersionArray;
+	manifest["metadata"]["generated_with"] = {"HoloLab": [packVersionArray.join(".")]}; // Modificado para HoloLab
+	manifest["metadata"]["authors"] = ["HoloLab", "§r§cGUIHJZZZ", ...config.AUTHORS]; // Modificado para HoloLab e seu nome, mais autores do formulário
+	manifest["metadata"]["url"] = "https://discord.gg/YTdKsTjnUy"; // URL do Discord
+	// Limpar settings existentes e adicionar os novos
+	manifest["settings"] = [
+		{
+			"type": "input",
+			"text": "TikTok",
+			"default": "https://www.tiktok.com/@guihjzzz?_t=ZM-8vawBdE0Ew2&_r=1",
+			"name": "tiktok_guihjzzz"
+		},
+		{
+			"type": "input",
+			"text": "Discord",
+			"default": "https://discord.gg/YTdKsTjnUy",
+			"name": "discord_guihjzzz"
+		}
+	];
+	if(config.DESCRIPTION) { // Adicionar links da descrição do formulário, se houver
 		let labelsAndLinks = findLinksInDescription(config.DESCRIPTION);
 		labelsAndLinks.forEach(([label, link], i) => {
 			manifest["settings"].push({
 				"type": "input",
-				"text": label,
+				"text": label || link, // Usar o link como texto se o label estiver vazio
 				"default": link,
-				"name": `link_${i}`
+				"name": `link_desc_${i}`
 			});
 		});
 	}
-	
+
+
 	let controlsHaveBeenCustomised = JSON.stringify(config.CONTROLS) != JSON.stringify(DEFAULT_PLAYER_CONTROLS);
 	let pmmpBedrockDataFetcher = config.RENAME_CONTROL_ITEMS || config.RETEXTURE_CONTROL_ITEMS? await createPmmpBedrockDataFetcher() : undefined;
 	let itemTags = config.RENAME_CONTROL_ITEMS || config.RETEXTURE_CONTROL_ITEMS? await pmmpBedrockDataFetcher.fetch("item_tags.json").then(res => res.json()) : undefined;
@@ -608,34 +642,48 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		languageFile = languageFile.replaceAll("{TOTAL_MATERIAL_COUNT}", totalMaterialCount);
 		languageFile = languageFile.replaceAll("{MATERIAL_LIST}", finalisedMaterialLists[language].map(({ translatedName, count }) => `${count} ${translatedName}`).join(", "));
 		
+		// Adicionar a linha de desenvolvimento
+		let devLine = "pack.description.developed_by=§r\nDeveloped by §l§btik§dtok §cGuihjzzz\n";
+		let originalPackDescriptionLineRegex = /pack\.description=([^\t#\n]+)/;
+		let match = languageFile.match(originalPackDescriptionLineRegex);
+		if (match) {
+			let originalDescription = match[1];
+			let newDescription = originalDescription.replace("§r{AUTHORS_SECTION}", devLine + "§r{AUTHORS_SECTION}");
+			languageFile = languageFile.replace(originalPackDescriptionLineRegex, `pack.description=${newDescription}`);
+		} else {
+			// Caso não encontre a linha original, apenas adiciona no final (menos ideal)
+			languageFile += `\n${devLine.replace("pack.description.developed_by=", "")}`;
+		}
+
+
 		// now substitute in the extra bits into the main description if needed
 		if(config.AUTHORS.length) {
 			languageFile = languageFile.replaceAll(/\{STRUCTURE_AUTHORS\[([^)]+)\]\}/g, (useless, delimiter) => config.AUTHORS.join(delimiter));
-			languageFile = languageFile.replaceAll("{AUTHORS_SECTION}", languageFile.match(/pack\.description\.authors=([^\t#\n]+)/)[1]);
+			languageFile = languageFile.replaceAll("{AUTHORS_SECTION}", languageFile.match(/pack\.description\.authors=([^\t#\n]+)/)?.[1] ?? "");
 		} else {
 			languageFile = languageFile.replaceAll("{AUTHORS_SECTION}", "");
 		}
 		if(config.DESCRIPTION) {
 			languageFile = languageFile.replaceAll("{DESCRIPTION}", config.DESCRIPTION.replaceAll("\n", "\\n"));
-			languageFile = languageFile.replaceAll("{DESCRIPTION_SECTION}", languageFile.match(/pack\.description\.description=([^\t#\n]+)/)[1]);
+			languageFile = languageFile.replaceAll("{DESCRIPTION_SECTION}", languageFile.match(/pack\.description\.description=([^\t#\n]+)/)?.[1] ?? "");
 		} else {
 			languageFile = languageFile.replaceAll("{DESCRIPTION_SECTION}", "");
 		}
-		let translatedDisabledFeatures = Object.entries(disabledFeatureTranslations).filter(([feature]) => !config[feature]).map(([feature, translationKey]) => languageFile.match(new RegExp(`pack\\.description\\.${translationKey}=([^\\t#\\n]+)`))[1]).join("\\n");
+		let translatedDisabledFeatures = Object.entries(disabledFeatureTranslations).filter(([feature]) => !config[feature]).map(([feature, translationKey]) => languageFile.match(new RegExp(`pack\\.description\\.${translationKey}=([^\\t#\\n]+)`))?.[1] ?? "").join("\\n");
 		if(translatedDisabledFeatures) {
 			languageFile = languageFile.replaceAll("{DISABLED_FEATURES}", translatedDisabledFeatures);
-			languageFile = languageFile.replaceAll("{DISABLED_FEATURES_SECTION}", languageFile.match(/pack\.description\.disabled_features=([^\t#\n]+)/)[1]);
+			languageFile = languageFile.replaceAll("{DISABLED_FEATURES_SECTION}", languageFile.match(/pack\.description\.disabled_features=([^\t#\n]+)/)?.[1] ?? "");
 		} else {
 			languageFile = languageFile.replaceAll("{DISABLED_FEATURES_SECTION}", "");
 		}
 		if(controlsHaveBeenCustomised) {
 			languageFile = languageFile.replaceAll("{CONTROLS}", inGameControls[language].replaceAll("\n", "\\n"));
-			languageFile = languageFile.replaceAll("{CONTROLS_SECTION}", languageFile.match(/pack\.description\.controls=([^\t#\n]+)/)[1]);
+			languageFile = languageFile.replaceAll("{CONTROLS_SECTION}", languageFile.match(/pack\.description\.controls=([^\t#\n]+)/)?.[1] ?? "");
 		} else {
 			languageFile = languageFile.replaceAll("{CONTROLS_SECTION}", "");
 		}
 		
-		languageFile = languageFile.replaceAll(/pack\.description\..+\s*/g, ""); // remove all the description template sections
+		languageFile = languageFile.replaceAll(/pack\.description\.(authors|description|disabled_features|controls|developed_by)=\s*/g, ""); // remove all the description template sections
 		languageFile = languageFile.replaceAll(/\t*#.+/g, ""); // remove comments
 		
 		if(config.RENAME_CONTROL_ITEMS) {
@@ -653,7 +701,17 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		let itemIconPatterns = Object.entries(itemIcons).filter(([key]) => key.startsWith("/") && key.endsWith("/")).map(([pattern, itemName]) => [new RegExp(pattern.slice(1, -1), "g"), itemName]);
 		await Promise.all(Object.entries(config.CONTROLS).map(async ([control, itemCriteria]) => {
 			let controlTexturePath = `textures/items/~${control.toLowerCase()}.png`; // because texture compositing works alphabetically not in array order, the ~ forces the control texture to always go on top of the actual item texture
-			let controlTexture = await fetch(`packTemplate/${controlTexturePath}`).then(res => res.toImage());
+			let controlTexture;
+			try {
+				controlTexture = await fetch(`packTemplate/${controlTexturePath}`).then(res => {
+					if (!res.ok) throw new Error(`Failed to fetch ${controlTexturePath}`);
+					return res.toImage();
+				});
+			} catch (e) {
+				console.warn(`Could not load control texture ${controlTexturePath}. Retexturing for ${control} will be skipped. Error: ${e}`);
+				return; // Pula este controle se a textura não puder ser carregada
+			}
+
 			let paddedTexture = await addPaddingToImage(controlTexture, { // make it small in the top-left corner
 				right: 16,
 				bottom: 16
@@ -781,6 +839,8 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 				controlItemTextures.push([resizedImagePath, resizedTextureBlob]);
 			}));
 		}));
+	} else { // Se RETEXTURE_CONTROL_ITEMS for falso, desabilitar
+		config.RETEXTURE_CONTROL_ITEMS = false;
 	}
 	
 	console.info("Finished making all pack files!");
@@ -795,8 +855,13 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	}
 	packFiles.push(["manifest.json", JSON.stringify(manifest)]);
 	packFiles.push(["pack_icon.png", packIcon]);
-	packFiles.push(["entity/armor_stand.entity.json", JSON.stringify(entityFile).replaceAll("HOLOGRAM_INITIAL_ACTIVATION", true)]);
-	packFiles.push(["subpacks/punch_to_activate/entity/armor_stand.entity.json", JSON.stringify(entityFile).replaceAll("HOLOGRAM_INITIAL_ACTIVATION", false)]);
+
+	// Modificação do entityFile para os subpacks
+	const entityFileString = JSON.stringify(entityFile);
+	packFiles.push(["entity/armor_stand.entity.json", entityFileString.replaceAll("HOLOGRAM_INITIAL_ACTIVATION", "true")]); // Subpack "default"
+	packFiles.push(["subpacks/punch_to_activate/entity/armor_stand.entity.json", entityFileString.replaceAll("HOLOGRAM_INITIAL_ACTIVATION", "false")]);
+
+
 	packFiles.push(["render_controllers/armor_stand.hologram.render_controllers.json", JSON.stringify(hologramRenderControllers)]);
 	if(config.PLAYER_CONTROLS_ENABLED) {
 		packFiles.push(["render_controllers/player.render_controllers.json", JSON.stringify(playerRenderControllers)]);
@@ -808,7 +873,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	uniqueBlocksToValidate.forEach(blockName => {
 		let particleName = `validate_${blockName.replace(":", ".")}`; // file names can't have : in them
 		let particle = structuredClone(blockValidationParticle);
-		particle["particle_effect"]["description"]["identifier"] = `holoprint:${particleName}`;
+		particle["particle_effect"]["description"]["identifier"] = `hololab:${particleName}`; // Alterado de holoprint
 		particle["particle_effect"]["components"]["minecraft:particle_expire_if_in_blocks"] = [blockName.includes(":")? blockName : `minecraft:${blockName}`]; // add back minecraft: namespace if it's missing
 		packFiles.push([`particles/${particleName}.json`, JSON.stringify(particle)]);
 	});
@@ -882,13 +947,13 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		}
 	}
 	
-	return new File([zippedPack], `${packName}.holoprint.mcpack`, {
+	return new File([zippedPack], `${packName}.hololab.mcpack`, { // Alterado de holoprint para hololab
 		type: "application/mcpack"
 	});
 }
 /**
- * Retrieves the structure files from a completed HoloPrint resource pack.
- * @param {File} resourcePack HoloPrint resource pack (`*.mcpack)
+ * Retrieves the structure files from a completed HoloLab resource pack.
+ * @param {File} resourcePack HoloLab resource pack (`*.mcpack)
  * @returns {Promise<Array<File>>}
  */
 export async function extractStructureFilesFromPack(resourcePack) {
@@ -905,8 +970,8 @@ export async function extractStructureFilesFromPack(resourcePack) {
 	}
 }
 /**
- * Updates a HoloPrint resource pack by remaking it.
- * @param {File} resourcePack HoloPrint resource pack to update (`*.mcpack`)
+ * Updates a HoloLab resource pack by remaking it.
+ * @param {File} resourcePack HoloLab resource pack to update (`*.mcpack`)
  * @param {HoloPrintConfig} [config]
  * @param {ResourcePackStack} [resourcePackStack]
  * @param {HTMLElement} [previewCont]
@@ -925,12 +990,12 @@ export async function updatePack(resourcePack, config, resourcePackStack, previe
  * @returns {String}
  */
 export function getDefaultPackName(structureFiles) {
-	let defaultName = structureFiles.map(structureFile => structureFile.name.replace(/(\.holoprint)?\.[^.]+$/, "")).join(", ");
+	let defaultName = structureFiles.map(structureFile => structureFile.name.replace(/(\.hololab)?\.[^.]+$/, "")).join(", "); // Alterado de holoprint
 	if(defaultName.length > 40) {
 		defaultName = `${defaultName.slice(0, 19)}...${defaultName.slice(-19)}`
 	}
 	if(defaultName.trim() == "") {
-		defaultName = "hologram";
+		defaultName = "hololab"; // Alterado de hologram
 	}
 	return defaultName;
 }
@@ -987,14 +1052,14 @@ export function addDefaultConfig(config) {
 			PLAYER_CONTROLS_ENABLED: true,
 			CONTROLS: {},
 			MATERIAL_LIST_ENABLED: true,
-			RETEXTURE_CONTROL_ITEMS: true,
+			RETEXTURE_CONTROL_ITEMS: true, // Definir como true, mas será desabilitado se as texturas não forem encontradas
 			CONTROL_ITEM_TEXTURE_SCALE: 1,
 			RENAME_CONTROL_ITEMS: true,
 			WRONG_BLOCK_OVERLAY_COLOR: [1, 0, 0, 0.3],
 			INITIAL_OFFSET: [0, 0, 0],
 			BACKUP_SLOT_COUNT: 10,
 			PACK_NAME: undefined,
-			PACK_ICON_BLOB: undefined,
+			PACK_ICON_BLOB: undefined, // Será tratado para usar a URL padrão
 			AUTHORS: [],
 			DESCRIPTION: undefined,
 			COMPRESSION_LEVEL: 5, // level 9 was 8 bytes larger than level 5 when I tested... :0
