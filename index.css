@@ -1,14 +1,16 @@
 /* Reset básico e configurações globais */
 :root {
-    --primary-color: #3b82f6; /* Azul principal da logo/interface */
-    --primary-text-color: #e0e0e0; /* Cinza claro para texto */
-    --secondary-text-color: #a0a0a0; /* Cinza mais escuro para subtextos */
-    --background-color: #111827; /* Fundo azul escuro/preto */
-    --surface-color: #1f2937; /* Cor para cards, áreas de input */
-    --border-color: #374151;
-    --hover-surface-color: #374151;
+    --primary-color: #3b82f6; /* Azul principal (ajuste conforme a imagem) */
+    --accent-color: #60a5fa; /* Azul mais claro para acentos */
+    --primary-text-color: #e5e7eb; /* Cinza bem claro para texto principal */
+    --secondary-text-color: #9ca3af; /* Cinza para texto secundário */
+    --background-color: #0d1117; /* Fundo azul muito escuro / quase preto */
+    --surface-color: #161b22; /* Cor para cards, áreas de input (um pouco mais claro que o fundo) */
+    --surface-hover-color: #21262d;
+    --border-color: #30363d;
     --font-family: 'Catamaran', 'Trebuchet MS', sans-serif;
-    --icon-scale: 1;
+    --border-radius: 8px;
+    --container-padding: 2rem;
 }
 
 * {
@@ -22,7 +24,10 @@ body {
     background-color: var(--background-color);
     color: var(--primary-text-color);
     line-height: 1.6;
-    font-size: 16px; /* Base font size */
+    font-size: 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
 }
 
 /* Cabeçalho */
@@ -30,9 +35,13 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 2rem;
-    background-color: var(--surface-color); /* Um pouco mais claro que o fundo principal */
+    padding: 1rem 5%; /* Usar porcentagem para responsividade */
+    background-color: rgba(22, 27, 34, 0.8); /* surface-color com transparência */
     border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
 }
 
 .logo-container {
@@ -41,21 +50,21 @@ header {
 }
 
 .logo-img {
-    width: 40px; /* Ajuste conforme necessário */
-    height: 40px;
-    margin-right: 0.5rem;
-    border: none; /* Remover borda padrão de img */
-    background: none; /* Remover fundo de noise padrão */
+    width: 32px; 
+    height: 32px;
+    margin-right: 0.75rem;
+    border: none; 
+    background: none;
 }
 
 .logo-text {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 700;
-    color: var(--primary-color);
+    color: var(--primary-text-color); /* Texto branco para contraste */
 }
 
 header nav a {
-    color: var(--primary-text-color);
+    color: var(--secondary-text-color);
     text-decoration: none;
     margin-left: 1.5rem;
     font-size: 0.9rem;
@@ -63,77 +72,86 @@ header nav a {
 }
 
 header nav a:hover {
-    color: var(--primary-color);
+    color: var(--accent-color);
 }
 
 .language-switcher select {
     background-color: var(--surface-color);
     color: var(--primary-text-color);
     border: 1px solid var(--border-color);
-    padding: 0.3rem 0.5rem;
-    border-radius: 4px;
+    padding: 0.4rem 0.6rem;
+    border-radius: var(--border-radius);
     font-family: var(--font-family);
     cursor: pointer;
+    font-size: 0.85rem;
 }
 
-
-/* Seção Principal (Hero) */
+/* Conteúdo Principal */
 main {
-    max-width: 900px; /* Largura máxima para o conteúdo principal */
+    flex-grow: 1;
+    width: 100%;
+    max-width: 1100px; 
     margin: 2rem auto;
     padding: 0 2rem;
-    text-align: center;
 }
 
 .hero-section {
-    padding: 3rem 0;
+    padding: 2rem 0 3rem 0;
+    text-align: center;
 }
 
 .hero-section h1 {
-    font-size: 2.5rem;
+    font-size: clamp(2rem, 5vw, 2.8rem); /* Tamanho de fonte responsivo */
     font-weight: 700;
-    color: var(--primary-color);
-    margin-bottom: 0.5rem;
+    color: var(--primary-text-color);
+    margin-bottom: 0.75rem;
 }
 
 .hero-section p {
-    font-size: 1.1rem;
+    font-size: clamp(0.9rem, 2.5vw, 1.1rem);
     color: var(--secondary-text-color);
-    max-width: 600px;
+    max-width: 700px;
     margin: 0 auto 2rem auto;
 }
 
-/* Seção de Upload de Textura */
-#texture-upload-section {
+/* Seções de Conteúdo */
+section {
     background-color: var(--surface-color);
-    padding: 2rem;
-    border-radius: 8px;
+    padding: var(--container-padding);
+    border-radius: var(--border-radius);
     margin-bottom: 2rem;
     border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
-#texture-upload-section h2 {
+section h2 {
     font-size: 1.5rem;
     color: var(--primary-text-color);
     margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
 }
 
-#texture-upload-section p {
+section > p:first-of-type { /* Parágrafo de descrição da seção */
     color: var(--secondary-text-color);
     margin-bottom: 1.5rem;
+    font-size: 0.95rem;
 }
 
+
+/* Área de Upload de Arquivo */
 .file-upload-area {
     border: 2px dashed var(--border-color);
-    border-radius: 8px;
-    padding: 2rem;
+    border-radius: var(--border-radius);
+    padding: 2.5rem;
     cursor: pointer;
     transition: border-color 0.2s ease-in-out, background-color 0.2s ease-in-out;
+    text-align: center; /* Centraliza o conteúdo interno */
 }
 
 .file-upload-area:hover, .file-upload-area.dragover {
     border-color: var(--primary-color);
-    background-color: rgba(59, 130, 246, 0.1); /* Azul claro transparente */
+    background-color: rgba(59, 130, 246, 0.05);
 }
 
 .drop-zone {
@@ -144,101 +162,193 @@ main {
 }
 
 .upload-icon {
-    width: 48px;
-    height: 48px;
-    fill: var(--primary-color);
-    margin-bottom: 0.5rem;
+    width: 40px;
+    height: 40px;
+    fill: var(--accent-color);
+    margin-bottom: 0.75rem;
 }
 
 .drop-zone p {
     color: var(--secondary-text-color);
     margin-bottom: 0;
+    font-size: 0.9rem;
 }
 
-#file-preview-area {
-    margin-top: 1rem;
+/* file-input-table (do componente JS) */
+file-input-table {
+    margin-top: 1.5rem;
+    display: block; /* Garante que o componente ocupe a largura */
+    --fit-table-main-bg: transparent; /* Para não sobrescrever o fundo da seção */
+    --fit-table-border-color: var(--border-color);
+    --fit-table-header-bg: rgba(255,255,255,0.05);
+    --fit-table-row-odd-bg: rgba(255,255,255,0.02);
+    --fit-table-row-even-bg: transparent;
+    --fit-table-text-color: var(--primary-text-color);
+    --fit-table-button-bg: rgba(255,255,255,0.1);
+}
+
+/* Wrapper para Preview e Opções */
+.main-content-wrapper {
+    display: grid;
+    grid-template-columns: 1fr; /* Padrão para mobile */
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+@media (min-width: 768px) { /* Duas colunas em telas maiores */
+    .main-content-wrapper {
+        grid-template-columns: 1fr 1.5fr; /* Preview menor, Opções maior */
+    }
+    #texture-preview-section {
+        order: 1; /* Preview à esquerda */
+    }
+    #hologram-options-section {
+        order: 2; /* Opções à direita */
+    }
+}
+
+
+/* Preview da Textura */
+#texture-preview-section .preview-container {
+    width: 100%;
+    aspect-ratio: 1/1;
+    background-color: var(--background-color); /* Fundo escuro para o preview */
+    border-radius: var(--border-radius);
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-/* Seção de Opções de Textura */
-#texture-options-section {
-    background-color: var(--surface-color);
-    padding: 2rem;
-    border-radius: 8px;
-    margin-bottom: 2rem;
-    text-align: left;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
     border: 1px solid var(--border-color);
+    min-height: 200px; /* Altura mínima */
+}
+#texturePreviewImageCont img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated; /* Para texturas pixel art */
+}
+#texturePreviewName {
+    color: var(--secondary-text-color);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+    text-align: center;
 }
 
-#texture-options-section h2 {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
+/* Opções do Holograma */
+#hologram-options-section .options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
 }
 
 .option-group {
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem; /* Menor margem no grid */
 }
 
 .option-group label {
     display: block;
-    margin-bottom: 0.3rem;
+    margin-bottom: 0.4rem;
     color: var(--secondary-text-color);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 500;
 }
 
 .option-group input[type="text"],
-.option-group input[type="color"],
 .option-group input[type="number"],
+.option-group input[type="color"],
 .option-group select {
     width: 100%;
-    padding: 0.6rem;
+    padding: 0.5rem 0.75rem;
     border: 1px solid var(--border-color);
-    background-color: var(--background-color); /* Fundo do input um pouco mais escuro */
+    background-color: var(--background-color); 
     color: var(--primary-text-color);
     border-radius: 4px;
     font-family: var(--font-family);
+    font-size: 0.9rem;
 }
-
 .option-group input[type="color"] {
-    padding: 0.3rem; /* Padding menor para color picker */
-    height: 40px;
+    padding: 0.2rem;
+    height: 36px; /* Ajuste para input de cor */
+}
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.checkbox-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-color);
 }
 
+
+.advanced-options {
+    margin-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 1.5rem;
+}
+.advanced-options summary {
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--accent-color);
+    margin-bottom: 1rem;
+}
+.multi-input {
+    display: flex;
+    gap: 0.5rem;
+}
+.multi-input input {
+    flex: 1;
+}
 
 /* Botão Principal */
-#generateTexturesButton {
+#generatePackButton {
     background-color: var(--primary-color);
     color: white;
     border: none;
-    padding: 0.8rem 2rem;
+    padding: 0.75rem 1.5rem;
     font-size: 1rem;
     font-weight: 500;
-    border-radius: 6px;
+    border-radius: var(--border-radius);
     cursor: pointer;
     transition: background-color 0.2s ease-in-out;
     display: block;
-    width: auto; /* Ou 100% se preferir */
-    margin: 2rem auto;
+    width: fit-content; 
+    margin: 2.5rem auto;
 }
 
-#generateTexturesButton:hover {
-    background-color: #2563eb; /* Azul um pouco mais escuro */
+#generatePackButton:hover {
+    background-color: #2563eb; 
 }
 
-/* Área de Saída */
-#outputArea {
-    margin-top: 2rem;
-    /* Estilos para links de download podem ser adicionados aqui */
+/* Seção de Relatório de Erros */
+#error-report-section h2 {
+     border-bottom: 1px solid var(--border-color);
+     padding-bottom: 0.5rem;
+}
+.log-container {
+    background-color: var(--background-color); /* Mais escuro que surface */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    min-height: 100px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 0.85rem;
+    text-align: left;
+}
+.log-container p:first-child {
+    color: var(--secondary-text-color);
 }
 
 /* Rodapé */
 footer {
     display: flex;
-    justify-content: space-around;
-    padding: 2rem;
-    background-color: var(--surface-color);
+    flex-wrap: wrap; /* Para melhor responsividade */
+    justify-content: space-between;
+    padding: 2.5rem 5%;
+    background-color: var(--background-color); /* Mesmo do body para integrar melhor */
     border-top: 1px solid var(--border-color);
     color: var(--secondary-text-color);
     font-size: 0.85rem;
@@ -246,32 +356,36 @@ footer {
 }
 
 .footer-column {
-    flex: 1;
+    flex: 1 1 200px; /* Permite quebrar em telas menores */
     padding: 0 1rem;
-    max-width: 300px; /* Para evitar que as colunas fiquem muito largas */
+    margin-bottom: 1.5rem; /* Espaço entre colunas quando quebram */
 }
 
 .footer-column h3 {
     color: var(--primary-text-color);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
     font-size: 1rem;
+    font-weight: 500;
 }
 
 .footer-column ul {
     list-style: none;
 }
+.footer-column ul li {
+    margin-bottom: 0.3rem;
+}
 
-.footer-column ul li a {
+.footer-column ul li a, .footer-column p a {
     color: var(--secondary-text-color);
     text-decoration: none;
     transition: color 0.2s ease-in-out;
 }
 
-.footer-column ul li a:hover {
-    color: var(--primary-color);
+.footer-column ul li a:hover, .footer-column p a:hover {
+    color: var(--accent-color);
 }
 
-/* Aviso de Drop de Arquivo */
+/* Aviso de Drop de Arquivo (mesmo de antes) */
 #dropFileNotice {
 	padding: 10px;
 	position: fixed;
@@ -280,14 +394,14 @@ footer {
 	width: 100vw;
 	height: 100vh;
 	box-sizing: border-box;
-	background: rgba(17, 24, 39, 0.8); /* Fundo escuro semi-transparente */
+	background: rgba(17, 24, 39, 0.8); 
     backdrop-filter: blur(5px);
 	font-size: 1.75em;
 	text-align: center;
 	display: flex;
 	justify-content: center;
 	align-items: center;
-    z-index: 1000; /* Para ficar sobre outros elementos */
+    z-index: 1000; 
 }
 #dropFileNotice.hidden {
     display: none !important;
@@ -296,32 +410,45 @@ footer {
     color: var(--primary-text-color);
 }
 
-/* Responsividade básica */
-@media (max-width: 768px) {
-    header {
-        flex-direction: column;
-        padding: 1rem;
-    }
-    header nav {
-        margin-top: 0.5rem;
-        margin-bottom: 0.5rem;
-    }
-    header nav a {
-        margin: 0 0.5rem;
-    }
-    .hero-section h1 {
-        font-size: 2rem;
-    }
-    .hero-section p {
-        font-size: 1rem;
-    }
-    footer {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-    }
-    .footer-column {
-        margin-bottom: 1.5rem;
-        max-width: 100%;
-    }
+/* Loader (para preview e outras operações) */
+.loader {
+	margin: auto;
+	width: 30px; /* Menor para seções de preview */
+	aspect-ratio: 1;
+	--c: no-repeat linear-gradient(var(--primary-color) 0 0);
+	background: var(--c) 0% 50%, var(--c) 50% 50%, var(--c) 100% 50%;
+	background-size: 20% 100%;
+	animation: l1 1s infinite linear;
+}
+@keyframes l1 {
+	0% { background-size: 20% 100%, 20% 100%, 20% 100%; }
+	33% { background-size: 20% 10%, 20% 100%, 20% 100%; }
+	50% { background-size: 20% 100%, 20% 10%, 20% 100%; }
+	66% { background-size: 20% 100%, 20% 100%, 20% 10%; }
+	100% { background-size: 20% 100%, 20% 100%, 20% 100%; }
+}
+.loader.hidden {
+    display: none;
+}
+
+/* Para o componente file-input-table */
+#structureFilesTable {
+    margin-top: 1rem;
+    /* Você pode adicionar mais estilos específicos para o file-input-table se necessário */
+}
+
+/* Adicionando estilos para os botões de download de pacotes completos (seção #completedPacksCont) */
+#completedPacksCont button {
+    background-color: var(--accent-color);
+    color: var(--background-color); /* Texto escuro para contraste com botão claro */
+    border: none;
+    padding: 0.6rem 1.2rem;
+    margin: 0.5rem 0;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s ease-in-out;
+}
+#completedPacksCont button:hover {
+    background-color: var(--primary-color);
 }
