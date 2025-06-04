@@ -574,26 +574,31 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	// Modificações do Manifest
 	manifest["header"]["name"] = `${packName} - §l§bHolo§dLab§r`;
     
+    let devString = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
+    let totalBlockCountString = `\n\n§lTotal block count: ${totalMaterialCount}`;
+    
     let materialListStringForManifest = finalisedMaterialLists["en_US"]
         .map(({ translatedName, count }) => `${count} ${translatedName}`)
         .join(", ");
-    
-    const MAX_DESC_LENGTH = 250; 
-    let devString = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
-    let fullDescription = `${devString}\n\n§lTotal block count: ${totalMaterialCount}\n§r${materialListStringForManifest}`;
 
-    if (fullDescription.length > MAX_DESC_LENGTH) {
+    let baseDescription = `${devString}${totalBlockCountString}`;
+    let fullDescription = `${baseDescription}\n§r${materialListStringForManifest}`;
+
+    const MAX_HEADER_DESC_LENGTH = 250; 
+
+    if (fullDescription.length > MAX_HEADER_DESC_LENGTH) {
         let مواد_restantes = `... and more materials.`; 
-        let devStringLength = devString.length + `\n\n§lTotal block count: ${totalMaterialCount}\n§r`.length + مواد_restantes.length;
-        let materialListAllowedLength = MAX_DESC_LENGTH - devStringLength;
-        if (materialListAllowedLength > 0) {
-             materialListStringForManifest = materialListStringForManifest.substring(0, materialListAllowedLength -3) + "..."; 
+        let devStringLength = baseDescription.length + `\n§r`.length + مواد_restantes.length; // Corrigido para usar baseDescription.length
+        let materialListAllowedLength = MAX_HEADER_DESC_LENGTH - devStringLength;
+        if (materialListAllowedLength > 10) { 
+             materialListStringForManifest = materialListStringForManifest.substring(0, materialListAllowedLength) + "..."; // Removido -3, substring já cuida disso
+            manifest["header"]["description"] = `${baseDescription}\n§r${materialListStringForManifest}`;
         } else {
-            materialListStringForManifest = ""; 
+            manifest["header"]["description"] = baseDescription;
         }
-        fullDescription = `${devString}\n\n§lTotal block count: ${totalMaterialCount}\n§r${materialListStringForManifest}${materialListStringForManifest ? مواد_restantes : ""}`;
+    } else {
+        manifest["header"]["description"] = fullDescription;
     }
-    manifest["header"]["description"] = fullDescription;
 
 	manifest["header"]["uuid"] = crypto.randomUUID();
 	let packVersion = VERSION.match(/^HoloLab v(\d+)\.(\d+)\.(\d+)$|^HoloLab (\w+)$/)?.slice(1)?.map(x => x ? (isNaN(parseInt(x)) ? 0 : +x) : 0) ?? [1, 0, 0];
@@ -643,7 +648,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
         
 		languageFile = languageFile.replaceAll("{PACK_NAME}", `${packName} - §l§bHolo§dLab§r`); 
 		
-        languageFile = languageFile.replace("{MATERIAL_LIST}", ""); // Remover placeholder, pois agora está no manifest header
+        languageFile = languageFile.replace("{MATERIAL_LIST}", ""); 
 		languageFile = languageFile.replaceAll(/^pack\.description\.(authors|description|disabled_features|controls|material_list_heading)=.*$/mg, ""); 
 		languageFile = languageFile.replaceAll(/\t*#.+/g, ""); 
         languageFile = languageFile.replace(/^\s*[\r\n]/gm, ""); 
@@ -1484,7 +1489,7 @@ async function makePackIconFallback(structureFile) {
 			i *= 4;
 			let bit = fileHashBits[i];
 			if(MORE_TILE_TYPES) {
-				if(fileHashBits[i] && fileHashBits[i + 1] && fileHashBits[i + 2] && fileHashBits[i + 3]) {
+				if(fileHashBytes[i] && fileHashBits[i + 1] && fileHashBits[i + 2] && fileHashBits[i + 3]) {
 					drawArc(x + 0.5, y + 0.5, 0, pi * 2);
 					continue;
 				}
