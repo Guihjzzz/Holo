@@ -11,7 +11,7 @@ import { addPaddingToImage, arrayMin, awaitAllEntries, CachingFetcher, concatena
 import ResourcePackStack from "./ResourcePackStack.js";
 import BlockUpdater from "./BlockUpdater.js";
 
-export const VERSION = "HoloLab dev"; // Mantido como HoloLab para metadados
+export const VERSION = "HoloLab dev";
 export const IGNORED_BLOCKS = ["air", "piston_arm_collision", "sticky_piston_arm_collision"];
 const IGNORED_BLOCK_ENTITIES = ["Beacon", "Beehive", "Bell", "BrewingStand", "ChiseledBookshelf", "CommandBlock", "Comparator", "Conduit", "EnchantTable", "EndGateway", "JigsawBlock", "Lodestone", "SculkCatalyst", "SculkShrieker", "SculkSensor", "CalibratedSculkSensor", "StructureBlock", "BrushableBlock", "TrialSpawner", "Vault"];
 export const PLAYER_CONTROL_NAMES = {
@@ -55,7 +55,7 @@ const FIXED_PACK_ICON_PATH = "guihjzzz.png";
  * @returns {Promise<File>} Resource pack (`*.mcpack`)
  */
 export async function makePack(structureFiles, config = {}, resourcePackStack, previewCont) {
-	console.info(`Running HoloLab ${VERSION}`); // Será HoloLab aqui
+	console.info(`Running HoloLab ${VERSION}`);
 	if(!resourcePackStack) {
 		console.debug("Waiting for resource pack stack initialisation...");
 		resourcePackStack = await new ResourcePackStack();
@@ -86,7 +86,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	// Make the pack
 	let loadedStuff = await loadStuff({
 		packTemplate: {
-			manifest: "manifest.json", // Este é o template base
+			manifest: "manifest.json", // Este é o template, será modificado abaixo
 			hologramRenderControllers: "render_controllers/armor_stand.hologram.render_controllers.json",
 			hologramGeo: "models/entity/armor_stand.hologram.geo.json", 
 			hologramMaterial: "materials/entity.material",
@@ -102,17 +102,14 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			terrainTexture: config.RETEXTURE_CONTROL_ITEMS? "textures/terrain_texture.json" : undefined,
 			hudScreenUI: config.MATERIAL_LIST_ENABLED? "ui/hud_screen.json" : undefined,
 			customEmojiFont: "font/glyph_E2.png",
-			languagesDotJson: "texts/languages.json", // Lista de arquivos de idioma a serem processados
-            // Carregar os templates .lang de packTemplate
-            en_US_lang_template: "texts/en_US.lang",
-            zh_CN_lang_template: "texts/zh_CN.lang" // Adicione outros se necessário
+			languagesDotJson: "texts/languages.json"
 		},
-		resources: { // Estes são buscados do ResourcePackStack (vanilla ou packs do usuário)
+		resources: {
 			entityFile: "entity/armor_stand.entity.json",
 			defaultPlayerRenderControllers: config.PLAYER_CONTROLS_ENABLED? "render_controllers/player.render_controllers.json" : undefined,
 			resourceItemTexture: config.RETEXTURE_CONTROL_ITEMS? "textures/item_texture.json" : undefined
 		},
-		otherFiles: { // Arquivos diretos
+		otherFiles: {
 			packIcon: packIconBlob, 
 			itemIcons: config.RETEXTURE_CONTROL_ITEMS? fetch("data/itemIcons.json").then(res => res.jsonc()) : undefined
 		},
@@ -121,26 +118,11 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			itemMetadata: "metadata/vanilladata_modules/mojang-items.json"
 		}
 	}, resourcePackStack);
-	
-    let { 
-        manifest: manifestTemplate, // Renomeado para evitar conflito com o manifest final
-        packIcon, entityFile, hologramRenderControllers, defaultPlayerRenderControllers, 
-        hologramGeo, hologramMaterial, hologramAnimationControllers, hologramAnimations, 
-        boundingBoxOutlineParticle, blockValidationParticle, savingBackupParticle, 
-        singleWhitePixelTexture, exclamationMarkTexture, saveIconTexture, itemTexture, 
-        terrainTexture, hudScreenUI, customEmojiFont, languagesDotJson, 
-        en_US_lang_template, zh_CN_lang_template,
-        resourceItemTexture, itemIcons 
-    } = loadedStuff.files;
-	
-    let { blockMetadata, itemMetadata } = loadedStuff.data;
-
-    // Conteúdo dos arquivos .lang do template
-    let templateLangFiles = {
-        "en_US": en_US_lang_template,
-        "zh_CN": zh_CN_lang_template
-        // Adicionar outros idiomas aqui conforme carregados
-    };
+	let { manifest, packIcon, entityFile, hologramRenderControllers, defaultPlayerRenderControllers, hologramGeo, hologramMaterial, hologramAnimationControllers, hologramAnimations, boundingBoxOutlineParticle, blockValidationParticle, savingBackupParticle, singleWhitePixelTexture, exclamationMarkTexture, saveIconTexture, itemTexture, hudScreenUI, customEmojiFont, languagesDotJson, resourceItemTexture, terrainTexture, itemIcons } = loadedStuff.files;
+	let { blockMetadata, itemMetadata } = loadedStuff.data;
+	let resourceLangFiles = (await loadStuff({
+		resources: Object.fromEntries(languagesDotJson.map(language => [language, `texts/${language}.lang`])) 
+	}, resourcePackStack)).files;
 	
 	let structures = nbts.map(nbt => nbt["structure"]);
 	
@@ -562,7 +544,7 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	
 	console.log("Block counts map:", materialList.materials);
 	let finalisedMaterialLists = Object.fromEntries(languagesDotJson.map(language => {
-		materialList.setLanguage(templateLangFiles[language] || templateLangFiles["en_US"]);
+		materialList.setLanguage(resourceLangFiles[language]); 
 		return [language, materialList.export()];
 	}));
 	let finalisedMaterialList = finalisedMaterialLists["en_US"]; 
@@ -590,27 +572,54 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	}
 	
 	// Modificações do Manifest
-	let finalManifest = structuredClone(manifestTemplate); // Usar uma cópia do template carregado
-
-	finalManifest["header"]["name"] = "pack.name"; // Aponta para a chave de tradução
-    finalManifest["header"]["description"] = "pack.description"; // Aponta para a chave de tradução
-	finalManifest["header"]["uuid"] = crypto.randomUUID();
-	let packVersionToUse = VERSION.match(/^HoloLab v(\d+)\.(\d+)\.(\d+)$|^HoloLab (\w+)$/)?.slice(1)?.map(x => x ? (isNaN(parseInt(x)) ? 0 : +x) : 0) ?? [1, 0, 0];
-    if (VERSION.endsWith(" dev") || VERSION.endsWith(" testing")) packVersionToUse = [1,0,0]; 
+	manifest["header"]["name"] = `${packName} - §l§bHolo§dLab§r`;
     
-	finalManifest["header"]["version"] = packVersionToUse;
-	finalManifest["modules"][0]["uuid"] = crypto.randomUUID();
-	finalManifest["modules"][0]["version"] = packVersionToUse;
-    finalManifest["modules"][0]["description"] = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz"; 
+    let devString = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
+    let totalBlockCountString = `\n\n§lTotal block count: ${totalMaterialCount}`;
+    
+    let materialListStringForManifest = finalisedMaterialLists["en_US"]
+        .map(({ translatedName, count }) => `${count} ${translatedName}`)
+        .join(", ");
 
-	finalManifest["metadata"]["generated_with"] = {"HoloLab": [VERSION]}; 
-    finalManifest["metadata"]["url"] = "https://discord.gg/YTdKsTjnUy"; 
-	finalManifest["metadata"]["authors"] = ["HoloLab", "§r§cGUIHJZZZ", ...config.AUTHORS].filter(Boolean); 
-    finalManifest["metadata"]["license"] = "CC BY-NC-SA 4.0";
+    let baseDescription = `${devString}${totalBlockCountString}`;
+    let fullDescription = `${baseDescription}\n§r${materialListStringForManifest}`;
 
-    finalManifest["settings"] = []; 
+    const MAX_HEADER_DESC_LENGTH = 250; 
 
-    finalManifest["settings"].push(
+    if (fullDescription.length > MAX_HEADER_DESC_LENGTH) {
+        let مواد_restantes_key = "pack.description.and_more_materials"; // Chave para tradução
+        let مواد_restantes = translate(مواد_restantes_key, "en_US") || "... and more materials."; // Fallback
+        
+        let devStringLength = baseDescription.length + "\n§r".length + مواد_restantes.length;
+        let materialListAllowedLength = MAX_HEADER_DESC_LENGTH - devStringLength;
+        
+        if (materialListAllowedLength > 10) { 
+             materialListStringForManifest = materialListStringForManifest.substring(0, materialListAllowedLength) + "...";
+            manifest["header"]["description"] = `${baseDescription}\n§r${materialListStringForManifest}`;
+        } else {
+            manifest["header"]["description"] = baseDescription;
+        }
+    } else {
+        manifest["header"]["description"] = fullDescription;
+    }
+
+	manifest["header"]["uuid"] = crypto.randomUUID();
+	let packVersion = VERSION.match(/^HoloLab v(\d+)\.(\d+)\.(\d+)$|^HoloLab (\w+)$/)?.slice(1)?.map(x => x ? (isNaN(parseInt(x)) ? 0 : +x) : 0) ?? [1, 0, 0];
+    if (VERSION.endsWith(" dev") || VERSION.endsWith(" testing")) packVersion = [1,0,0]; 
+    
+	manifest["header"]["version"] = packVersion;
+	manifest["modules"][0]["uuid"] = crypto.randomUUID();
+	manifest["modules"][0]["version"] = packVersion;
+    manifest["modules"][0]["description"] = "§r\nDeveloped by §l§btik§dtok §cGuihjzzz"; 
+
+	manifest["metadata"]["generated_with"] = {"HoloLab": [VERSION]}; 
+    manifest["metadata"]["url"] = "https://discord.gg/YTdKsTjnUy"; 
+	manifest["metadata"]["authors"] = ["HoloLab", "§r§cGUIHJZZZ", ...config.AUTHORS].filter(Boolean); 
+    manifest["metadata"]["license"] = "CC BY-NC-SA 4.0";
+
+    manifest["settings"] = []; 
+
+    manifest["settings"].push(
         {
             "type": "input",
             "text": "§bTIK§dTOK:", 
@@ -628,79 +637,30 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	let controlsHaveBeenCustomised = JSON.stringify(config.CONTROLS) != JSON.stringify(DEFAULT_PLAYER_CONTROLS);
 	let pmmpBedrockDataFetcher = config.RENAME_CONTROL_ITEMS || config.RETEXTURE_CONTROL_ITEMS? await createPmmpBedrockDataFetcher() : undefined;
 	let itemTags = config.RENAME_CONTROL_ITEMS || config.RETEXTURE_CONTROL_ITEMS? await pmmpBedrockDataFetcher.fetch("item_tags.json").then(res => res.json()) : undefined;
-	let { inGameControls, controlItemTranslations } = controlsHaveBeenCustomised || config.RENAME_CONTROL_ITEMS? await translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, templateLangFiles, itemTags) : {};
+	let { inGameControls, controlItemTranslations } = controlsHaveBeenCustomised || config.RENAME_CONTROL_ITEMS? await translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, resourceLangFiles, itemTags) : {};
 	
-	let packGenerationTime = (new Date()).toLocaleString();
-	const disabledFeatureTranslations = { 
-		"SPAWN_ANIMATION_ENABLED": "spawn_animation_disabled",
-		"PLAYER_CONTROLS_ENABLED": "player_controls_disabled",
-		"MATERIAL_LIST_ENABLED": "material_list_disabled",
-		"RETEXTURE_CONTROL_ITEMS": "retextured_control_items_disabled",
-		"RENAME_CONTROL_ITEMS": "renamed_control_items_disabled"
-	};
-
-	let languageFiles = await Promise.all(languagesDotJson.map(async languageCode => {
-		let langFileContent = templateLangFiles[languageCode] || templateLangFiles["en_US"];
-
-		langFileContent = langFileContent.replaceAll("{PACK_NAME}", packName); // Usar o packName aqui
-		langFileContent = langFileContent.replaceAll("{PACK_GENERATION_TIME}", packGenerationTime);
-		langFileContent = langFileContent.replaceAll("{TOTAL_MATERIAL_COUNT}", totalMaterialCount);
+	let languageFiles = await Promise.all(languagesDotJson.map(async language => {
+		let languageFile = (await fetch(`packTemplate/texts/${language}.lang`).then(res => res.text())).replaceAll("\r\n", "\n"); 
 		
-        let materialListForThisLang = finalisedMaterialLists[languageCode]
-            .map(({ translatedName, partitionedCount }) => `${partitionedCount} ${translatedName}`)
-            .join(", ");
-        
-        const MAX_LANG_MATERIAL_LIST_LENGTH = 180; 
-        if (materialListForThisLang.length > MAX_LANG_MATERIAL_LIST_LENGTH) {
-            let andMoreMaterialsKey = "pack.description.and_more_materials";
-            let andMoreMaterialsText = translate(andMoreMaterialsKey, languageCode) || "... and more materials."; 
-            materialListForThisLang = materialListForThisLang.substring(0, MAX_LANG_MATERIAL_LIST_LENGTH - andMoreMaterialsText.length) + andMoreMaterialsText;
+        const newPackDescriptionForLang = "pack.description=§r\nDeveloped by §l§btik§dtok §cGuihjzzz§r";
+        if (languageFile.match(/^pack\.description=.*$/m)) {
+            languageFile = languageFile.replace(/^pack\.description=.*$/m, newPackDescriptionForLang);
+        } else {
+            languageFile = newPackDescriptionForLang + "\n" + languageFile;
         }
-        langFileContent = langFileContent.replaceAll("{MATERIAL_LIST}", materialListForThisLang);
+        
+		languageFile = languageFile.replaceAll("{PACK_NAME}", `${packName} - §l§bHolo§dLab§r`); 
 		
-		if(config.AUTHORS.length) {
-            let authorsSectionTemplate = translate("pack.description.authors_template", languageCode) || "\nStructure made by {STRUCTURE_AUTHORS}";
-			langFileContent = langFileContent.replaceAll("{AUTHORS_SECTION}", authorsSectionTemplate.replace("{STRUCTURE_AUTHORS}", config.AUTHORS.join(" and ")));
-		} else {
-			langFileContent = langFileContent.replaceAll("{AUTHORS_SECTION}", "");
-		}
+        languageFile = languageFile.replace("{MATERIAL_LIST}", ""); 
+		languageFile = languageFile.replaceAll(/^pack\.description\.(authors|description|disabled_features|controls|material_list_heading)=.*$/mg, ""); 
+		languageFile = languageFile.replaceAll(/\t*#.+/g, ""); 
+        languageFile = languageFile.replace(/^\s*[\r\n]/gm, ""); 
 
-		if(config.DESCRIPTION) {
-            let userDescTemplate = translate("pack.description.user_description_template", languageCode) || "\n{DESCRIPTION}";
-			langFileContent = langFileContent.replaceAll("{DESCRIPTION_SECTION}", userDescTemplate.replace("{DESCRIPTION}", config.DESCRIPTION.replaceAll("\n", "\\n")));
-		} else {
-			langFileContent = langFileContent.replaceAll("{DESCRIPTION_SECTION}", "");
-		}
-
-		let translatedDisabledFeatures = Object.entries(disabledFeatureTranslations)
-            .filter(([feature]) => !config[feature])
-            .map(([_, translationKey]) => translate(translationKey, languageCode))
-            .filter(Boolean)
-            .join("\\n");
-
-		if(translatedDisabledFeatures) {
-            let disabledFeaturesTemplate = translate("pack.description.disabled_features_template", languageCode) || "\n§4§o{DISABLED_FEATURES}§r";
-			langFileContent = langFileContent.replaceAll("{DISABLED_FEATURES_SECTION}", disabledFeaturesTemplate.replace("{DISABLED_FEATURES}", translatedDisabledFeatures));
-		} else {
-			langFileContent = langFileContent.replaceAll("{DISABLED_FEATURES_SECTION}", "");
-		}
-
-		if(controlsHaveBeenCustomised && inGameControls && inGameControls[languageCode]) {
-            let controlsTemplate = translate("pack.description.controls_template", languageCode) || "\n\n§lControls:§r{CONTROLS}";
-			langFileContent = langFileContent.replaceAll("{CONTROLS_SECTION}", controlsTemplate.replace("{CONTROLS}", inGameControls[languageCode].replaceAll("\n", "\\n")));
-		} else {
-			langFileContent = langFileContent.replaceAll("{CONTROLS_SECTION}", "");
+		if(config.RENAME_CONTROL_ITEMS) {
+			languageFile += "\n" + controlItemTranslations[language]; 
 		}
 		
-        langFileContent = langFileContent.replace(/{AUTHORS_SECTION}|{DESCRIPTION_SECTION}|{DISABLED_FEATURES_SECTION}|{CONTROLS_SECTION}/g, "");
-		langFileContent = langFileContent.replaceAll(/\t*#.+/g, ""); 
-        langFileContent = langFileContent.replace(/^\s*[\r\n]/gm, ""); 
-
-		if(config.RENAME_CONTROL_ITEMS && controlItemTranslations && controlItemTranslations[languageCode]) {
-			langFileContent += "\n" + controlItemTranslations[languageCode]; 
-		}
-		
-		return [languageCode, langFileContent.trim()]; 
+		return [language, languageFile.trim()]; 
 	}));
 	
 	let hasModifiedTerrainTexture = false;
@@ -853,14 +813,14 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 	console.info("Finished making all pack files!");
 	
 	let packFileWriter = new BlobWriter();
-	let packZip = new ZipWriter(packFileWriter); // Renomeado para evitar conflito com a variável 'pack'
+	let pack = new ZipWriter(packFileWriter);
 	let packFiles = [];
 	if(structureFiles.length == 1) {
 		packFiles.push([".mcstructure", structureFiles[0], structureFiles[0].name]);
 	} else {
 		packFiles.push(...structureFiles.map((structureFile, i) => [`${i}.mcstructure`, structureFile, structureFile.name]));
 	}
-	packFiles.push(["manifest.json", JSON.stringify(finalManifest)]); // Usar finalManifest
+	packFiles.push(["manifest.json", JSON.stringify(manifest)]);
 	packFiles.push(["pack_icon.png", packIcon]);
 	packFiles.push(["entity/armor_stand.entity.json", JSON.stringify(entityFile).replaceAll("HOLOGRAM_INITIAL_ACTIVATION", true)]);
 	packFiles.push(["subpacks/punch_to_activate/entity/armor_stand.entity.json", JSON.stringify(entityFile).replaceAll("HOLOGRAM_INITIAL_ACTIVATION", false)]);
@@ -902,8 +862,8 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 		}
 	}
 	packFiles.push(["texts/languages.json", JSON.stringify(languagesDotJson)]);
-	languageFiles.forEach(([languageCode, langFileContent]) => {
-		packFiles.push([`texts/${languageCode}.lang`, langFileContent]);
+	languageFiles.forEach(([language, languageFile]) => {
+		packFiles.push([`texts/${language}.lang`, languageFile]);
 	});
 	
 	await Promise.all(packFiles.map(([fileName, fileContents, comment]) => {
@@ -913,12 +873,12 @@ export async function makePack(structureFiles, config = {}, resourcePackStack, p
 			level: config.COMPRESSION_LEVEL
 		};
 		if(fileContents instanceof Blob) {
-			return packZip.add(fileName, new BlobReader(fileContents), options);
+			return pack.add(fileName, new BlobReader(fileContents), options);
 		} else {
-			return packZip.add(fileName, new TextReader(fileContents), options);
+			return pack.add(fileName, new TextReader(fileContents), options);
 		}
 	}));
-	let zippedPack = await packZip.close();
+	let zippedPack = await pack.close();
 	
 	console.info(`Finished creating pack in ${(performance.now() - startTime).toFixed(0) / 1000}s!`);
 	
@@ -1452,11 +1412,11 @@ function patchRenderControllers(renderControllers, patches) {
  * @param {Record<String, any>} blockMetadata
  * @param {Record<String, any>} itemMetadata
  * @param {Array<String>} languagesDotJson
- * @param {Record<String, String>} templateLangFiles
+ * @param {Record<String, String>} resourceLangFiles
  * @param {Record<String, Array<String>>} itemTags
  * @returns {Promise<{ inGameControls: Record<String, String>, controlItemTranslations: Record<String, String> }>}
  */
-async function translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, templateLangFiles, itemTags) {
+async function translateControlItems(config, blockMetadata, itemMetadata, languagesDotJson, resourceLangFiles, itemTags) {
 	let controlsMaterialList = await new MaterialList(blockMetadata, itemMetadata);
 	let inGameControls = {};
 	let controlItemTranslations = {};
@@ -1469,7 +1429,7 @@ async function translateControlItems(config, blockMetadata, itemMetadata, langua
 		let controlItemTranslationKeys = {};
 		Object.entries(config.CONTROLS).forEach(([control, itemCriteria]) => {
 			controlsMaterialList.clear();
-			controlsMaterialList.setLanguage(templateLangFiles[language] || templateLangFiles["en_US"]);
+			controlsMaterialList.setLanguage(resourceLangFiles[language]);
 			itemCriteria["names"].forEach(itemName => controlsMaterialList.addItem(itemName));
 			
 			let itemInfo = controlsMaterialList.export();
