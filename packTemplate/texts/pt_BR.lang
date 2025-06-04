@@ -1,0 +1,20 @@
+pack.name={PACK_NAME} - §l§bHolo§dLab§r
+pack.description=§r\nDesenvolvido por §l§btik§dtok §cGuihjzzz§r\n§oGerado em {PACK_GENERATION_TIME}§r{AUTHORS_SECTION}{DESCRIPTION_SECTION}{DISABLED_FEATURES_SECTION}{CONTROLS_SECTION}\n\n§lContagem total de blocos: {TOTAL_MATERIAL_COUNT}\n§r{MATERIAL_LIST}
+
+# Templates para seções opcionais da descrição
+pack.description.authors_template=\nEstrutura feita por {STRUCTURE_AUTHORS}
+pack.description.user_description_template=\n{DESCRIPTION}
+pack.description.disabled_features_template=\n§4§o{DISABLED_FEATURES}§r
+pack.description.controls_template=\n\n§lControles:§r{CONTROLS}
+
+# Traduções para funcionalidades desabilitadas
+pack.description.spawn_animation_disabled=Animação de surgimento desabilitada
+pack.description.player_controls_disabled=Controles do jogador desabilitados
+pack.description.material_list_disabled=Lista de materiais desabilitada
+pack.description.retextured_control_items_disabled=Retexturização de itens de controle desabilitada
+pack.description.renamed_control_items_disabled=Renomeação de itens de controle desabilitada
+
+pack.description.and_more_materials=... e mais materiais.
+
+# Título para a lista de materiais no HUD
+holoprint.material_list.heading=Lista de Materiais: {PACK_NAME}
